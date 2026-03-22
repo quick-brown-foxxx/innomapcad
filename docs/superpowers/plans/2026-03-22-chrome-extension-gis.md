@@ -246,6 +246,7 @@ git commit -m "feat: add data preparation script and GeoJSON data for Innopolis"
 fastapi==0.115.0
 uvicorn[standard]==0.30.0
 shapely==2.0.6
+pyproj==3.6.1
 pydantic==2.9.0
 geojson-pydantic==1.1.1
 pytest==8.3.0
@@ -362,16 +363,19 @@ from fastapi.middleware.cors import CORSMiddleware
 from services.data_store import store
 from models import HealthResponse
 
+import os
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    store.load("data")
+    data_dir = os.environ.get("DATA_DIR", "data")
+    store.load(data_dir)
     yield
 
 app = FastAPI(title="InnoMapCAD API", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://4dinno.ru", "http://localhost:*"],
+    allow_origins=["https://4dinno.ru"],
+    allow_origin_regex=r"http://localhost:\d+",
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -547,11 +551,10 @@ git commit -m "feat: add GET /api/v1/presets endpoint with 5 building presets"
 import pytest
 import json
 import os
-import tempfile
 from httpx import AsyncClient, ASGITransport
 
 @pytest.fixture(autouse=True)
-def setup_test_data(tmp_path):
+def setup_test_data(tmp_path, monkeypatch):
     """Create minimal test GeoJSON files before each test."""
     cadastral = {
         "type": "FeatureCollection",
@@ -584,7 +587,9 @@ def setup_test_data(tmp_path):
     (data_dir / "cadastral.geojson").write_text(json.dumps(cadastral))
     (data_dir / "protection_zones.geojson").write_text(json.dumps(zones))
 
-    # Reload store with test data
+    # Set env var so main.py lifespan uses test data
+    monkeypatch.setenv("DATA_DIR", str(data_dir))
+
     from services.data_store import store
     store.layers.clear()
     store.shapes.clear()
@@ -692,12 +697,12 @@ CONFLICTING_GEOMETRY = {
                      [48.746, 55.7525]]]
 }
 
-# A polygon OUTSIDE any zone (should be valid)
+# A polygon INSIDE the cadastral parcel but OUTSIDE the protection zone (should be valid)
 SAFE_GEOMETRY = {
     "type": "Polygon",
-    "coordinates": [[[48.76, 55.76], [48.761, 55.76],
-                     [48.761, 55.761], [48.76, 55.761],
-                     [48.76, 55.76]]]
+    "coordinates": [[[48.741, 55.751], [48.743, 55.751],
+                     [48.743, 55.7515], [48.741, 55.7515],
+                     [48.741, 55.751]]]
 }
 
 @pytest.mark.asyncio
@@ -745,14 +750,9 @@ from shapely.geometry import shape, mapping
 from services.data_store import store
 from models import Conflict
 
-# Presets setback values (duplicated from routers/presets.py for now)
-PRESET_SETBACKS = {
-    "residential": 10,
-    "office": 8,
-    "transformer": 15,
-    "parking": 3,
-    "warehouse": 5,
-}
+from routers.presets import PRESETS
+# Build setback lookup from presets
+PRESET_SETBACKS = {p.slug: p.setback_m for p in PRESETS}
 
 def validate_placement(geometry: dict, preset_slug: str) -> list[Conflict]:
     """
@@ -786,10 +786,14 @@ def validate_placement(geometry: dict, preset_slug: str) -> list[Conflict]:
     # Check 2: Setback buffer intersections with protection zones
     setback = PRESET_SETBACKS.get(preset_slug, 5)
     if setback > 0:
-        # Note: buffer in degrees is approximate. For Innopolis latitude,
-        # 1 degree ≈ 111km lat, ≈ 62km lon. setback_m / 111000 is rough.
-        buffer_deg = setback / 111000  # rough approximation
-        buffered = obj_shape.buffer(buffer_deg)
+        # Use UTM zone 39N (EPSG:32639) for accurate metric buffering near Innopolis
+        from pyproj import Transformer
+        transformer_to_utm = Transformer.from_crs("EPSG:4326", "EPSG:32639", always_xy=True)
+        transformer_to_wgs = Transformer.from_crs("EPSG:32639", "EPSG:4326", always_xy=True)
+        from shapely.ops import transform
+        obj_utm = transform(transformer_to_utm.transform, obj_shape)
+        buffered_utm = obj_utm.buffer(setback)
+        buffered = transform(transformer_to_wgs.transform, buffered_utm)
         for i, zone_shape in enumerate(store.get_shapes("protection_zones")):
             if buffered.intersects(zone_shape) and not obj_shape.intersects(zone_shape):
                 zone_data = store.get_layer("protection_zones")
@@ -1298,16 +1302,23 @@ Update `content.js` to inject all page-context scripts:
       'layers/zones-layer.js',
       'injected.js',  // Must be last — it calls init()
     ];
-    scripts.forEach(src => {
+    // Chain loading sequentially to guarantee order
+    function loadNext(index) {
+      if (index >= scripts.length) return;
+      const src = scripts[index];
       const script = document.createElement('script');
       script.src = chrome.runtime.getURL(src);
       if (src === 'injected.js') {
         script.dataset.backendUrl = BACKEND_URL;
         script.dataset.extensionId = chrome.runtime.id;
       }
+      script.onload = () => {
+        script.remove();
+        loadNext(index + 1);
+      };
       (document.head || document.documentElement).appendChild(script);
-      script.onload = () => script.remove();
-    });
+    }
+    loadNext(0);
   }
 ```
 
@@ -1672,21 +1683,23 @@ Update `content.js` init function:
     injectPageScript();
   }
 
-  function injectPanelScript() {
-    const script = document.createElement('script');
-    script.src = chrome.runtime.getURL('ui/panel.js');
-    (document.head || document.documentElement).appendChild(script);
-    script.onload = () => {
-      script.remove();
-      // Create panel after script loads
-      if (window.__innomapcad_createPanel) {
-        window.__innomapcad_createPanel();
-      }
-    };
+  // panel.js is loaded via content_scripts in manifest.json
+  // Just call createPanel after map is ready
+  if (window.__innomapcad_createPanel) {
+    window.__innomapcad_createPanel();
   }
 ```
 
-Also add `ui/panel.js` to `web_accessible_resources` in manifest.json.
+Update `manifest.json` to include `panel.js` in `content_scripts` (not `web_accessible_resources`):
+
+```json
+  "content_scripts": [{
+    "matches": ["*://4dinno.ru/map/*"],
+    "js": ["ui/panel.js", "content.js"],
+    "css": ["ui/panel.css"],
+    "run_at": "document_idle"
+  }],
+```
 
 - [ ] **Step 4: Test manually**
 
@@ -1794,12 +1807,11 @@ Add `lib/turf.min.js` to injected scripts in `content.js` (before `injected.js`)
       pickable: false,
       stroked: true,
       filled: false,
-      getLineColor: [255, 165, 0, 150],  // Orange dashed
+      // Note: dashed lines would require PathStyleExtension (not available).
+      // Using solid orange line instead.
+      getLineColor: [255, 165, 0, 150],
       getLineWidth: 2,
       lineWidthMinPixels: 1,
-      getDashArray: [4, 4],
-      dashJustified: true,
-      extensions: [],  // Would need PathStyleExtension for dashes
     });
   }
 
@@ -1937,11 +1949,18 @@ Add to `injected.js`, after `loadAndAddLayers()` call:
       const bridge = window.__innomapcad_bridge;
       const layerId = event.data.layer === 'cadastral'
         ? 'innomapcad-cadastral' : 'innomapcad-zones';
-      if (event.data.visible) {
-        // Re-add layer — would need to store references
-        // For now, just toggle visibility by removing/re-adding
-      } else {
+      if (!event.data.visible) {
+        // Cache layer before removing
+        const layer = bridge.customLayers.find(l => l.props.id === layerId);
+        if (layer) {
+          window.__innomapcad_cachedLayers = window.__innomapcad_cachedLayers || {};
+          window.__innomapcad_cachedLayers[layerId] = layer;
+        }
         bridge.removeLayer(layerId);
+      } else {
+        // Re-add cached layer
+        const cached = window.__innomapcad_cachedLayers?.[layerId];
+        if (cached) bridge.addLayer(cached);
       }
     }
   });
@@ -2015,11 +2034,14 @@ Add to `injected.js`, after `loadAndAddLayers()` call:
   setupPlacementHandler();
 ```
 
+> **Note:** Drag-to-move for placed objects is descoped for MVP. Users click to re-place objects at a new location. This matches the simplified spec scope.
+
 - [ ] **Step 6: Update content.js to inject all new scripts**
 
-Update the `injectPageScript` scripts array:
+Replace the `injectPageScript` function with the full sequential loader:
 
 ```javascript
+  function injectPageScript() {
     const scripts = [
       'lib/turf.min.js',
       'layers/deck-bridge.js',
@@ -2030,6 +2052,24 @@ Update the `injectPageScript` scripts array:
       'validation/server-validator.js',
       'injected.js',
     ];
+    // Chain loading sequentially to guarantee order
+    function loadNext(index) {
+      if (index >= scripts.length) return;
+      const src = scripts[index];
+      const script = document.createElement('script');
+      script.src = chrome.runtime.getURL(src);
+      if (src === 'injected.js') {
+        script.dataset.backendUrl = BACKEND_URL;
+        script.dataset.extensionId = chrome.runtime.id;
+      }
+      script.onload = () => {
+        script.remove();
+        loadNext(index + 1);
+      };
+      (document.head || document.documentElement).appendChild(script);
+    }
+    loadNext(0);
+  }
 ```
 
 Update `manifest.json` `web_accessible_resources` to include new paths.
@@ -2043,6 +2083,8 @@ Update `manifest.json` `web_accessible_resources` to include new paths.
 5. Click "Проверить" — server validation runs
 6. Click "Убрать объект" — building removed
 7. Place building inside a protection zone — should show red + conflicts
+
+> **Optional:** If time permits, add Node.js unit tests for `createBuildingPolygon` and `validateClient` using a simple test runner (e.g., `node --test`).
 
 - [ ] **Step 8: Commit**
 
