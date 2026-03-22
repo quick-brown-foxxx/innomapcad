@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "chrome-devtools-with-extension": {
+      "command": "bash",
+      "args": ["scripts/chrome-devtools-mcp-with-extension.sh"],
+      "env": {
+        "EXTENSION_DIR": ""
+      }
+    }
+  }
+}

@@ -1,21 +1,44 @@
 ---
 name: testing-python
-description: "Python testing with pytest: philosophy, fixtures, mock servers, containerized testing. Use when writing tests or setting up test infrastructure."
+description: "Python testing with pytest for FastAPI + Shapely GIS backend: fixtures, validation, geometry testing. Use when writing tests or setting up test infrastructure."
 ---
 
-# Testing Python
+# Testing Python — InnoMapCAD Backend
 
-Tests prove features work. Coverage is secondary. E2e tests beat unit tests. Real beats mocked.
+Tests prove features work. Coverage is secondary. Real geometry beats mocked geometry. Real HTTP beats patched handlers.
 
 ---
 
 ## Philosophy
 
-- **Trustworthiness > coverage.** A test that mocks away the tested thing proves nothing.
-- **5 good e2e tests > 100 unit tests** with heavy mocking.
-- **Pareto principle.** Write the fewest tests that cover 80% of what matters. E2e tests naturally do this.
-- **Unit tests for pure logic only.** Functions that transform data honestly.
-- **Real over mocked.** Real HTTP servers (pytest-httpserver), real tmp dirs, real processes.
+- **Trustworthiness > coverage.** A test that mocks away Shapely proves nothing about geometry.
+- **Real over mocked.** Real FastAPI TestClient, real Shapely operations, real GeoJSON files.
+- **Pareto principle.** Write the fewest tests that cover 80% of what matters.
+- **Each endpoint: minimum 2 tests** — happy path + edge case.
+- **Never mock Shapely** — test with real geometry operations.
+- **Never mock GeoJSON** — use real files from `backend/data/` or realistic coordinates.
+
+---
+
+## Backend as E2E Test Server
+
+The FastAPI backend serves double duty:
+
+1. **Production API** for the Chrome Extension
+2. **Test fixture server** for Playwright e2e tests
+
+When Playwright e2e tests run, they start the backend via `webServer` config in `playwright.config.ts`. The backend serves real GeoJSON data from `backend/data/`. This means:
+
+- **Backend tests** (pytest + TestClient) verify API contracts independently
+- **E2e tests** (Playwright) start the real backend and test the full stack
+- **No separate mock servers needed** — the real backend IS the test fixture
+
+The two test layers complement each other:
+
+| Layer | Tool | What it tests |
+|-------|------|---------------|
+| API contracts | pytest + TestClient | Endpoints, validation, geometry logic |
+| Full stack | Playwright | Extension UI + backend integration |
 
 ---
 
@@ -31,169 +54,210 @@ When writing new tests, plan before coding:
 
 ---
 
-## Test Priority
-
-1. **CLI / e2e tests** — run actual commands, check output + exit codes
-2. **Integration tests** — component interaction through public API
-3. **Unit tests** — pure data transformation functions
-4. **Skip** — framework glue, UI layout, trivial getters
-
----
-
-## Project Setup
-
-### Directory Structure
+## Test Structure
 
 ```
-tests/
-├── unit/              # Pure function tests
-├── integration/       # CLI tests, component interaction
-├── fixtures/          # Shared test data and helpers
-└── conftest.py        # Shared fixtures
-```
-
-### pyproject.toml Configuration
-
-```toml
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-python_files = ["test_*.py"]
-python_classes = ["Test*"]
-python_functions = ["test_*"]
-asyncio_mode = "auto"
-
-markers = [
-    "unit: unit tests",
-    "integration: integration tests",
-]
-```
-
-### Dependencies
-
-```toml
-[dependency-groups]
-dev = [
-    "pytest>=9.0.1",
-    "pytest-cov>=7.0.0",
-    "pytest-asyncio>=1.3.0",
-    # "pytest-qt>=4.5.0",          # For Qt apps
-    # "pytest-httpserver>=1.1.0",  # For HTTP mocking
-]
-```
-
----
-
-## Test Examples
-
-### CLI Test Example
-
-```python
-import subprocess
-
-def test_list_profiles_empty() -> None:
-    result = subprocess.run(
-        ["uv", "run", "poe", "app", "list"],
-        capture_output=True, text=True,
-    )
-    assert result.returncode == 0
-    assert "No profiles found" in result.stdout
-
-def test_create_and_list_profile(tmp_path: Path) -> None:
-    env = {**os.environ, "APP_DATA_DIR": str(tmp_path)}
-    subprocess.run(
-        ["uv", "run", "poe", "app", "create", "test-profile"],
-        env=env, check=True,
-    )
-    result = subprocess.run(
-        ["uv", "run", "poe", "app", "list"],
-        capture_output=True, text=True, env=env,
-    )
-    assert "test-profile" in result.stdout
-```
-
-### Result Pattern Test Example
-
-```python
-def test_load_config_missing_file() -> None:
-    result = load_config(Path("/nonexistent"))
-    assert result.is_err
-    assert "not found" in result.unwrap_err()
-
-def test_load_config_valid() -> None:
-    result = load_config(Path("tests/fixtures/valid_config.yaml"))
-    assert result.is_ok
-    config = result.unwrap()
-    assert config.name == "test"
-```
-
-### Async Test Example
-
-```python
-@pytest.mark.asyncio
-async def test_fetch_data() -> None:
-    result = await fetch_data("https://httpbin.org/get")
-    assert result.is_ok
+backend/
+├── tests/
+│   ├── conftest.py              # Shared fixtures (TestClient, geometry helpers)
+│   ├── test_health.py           # GET /health
+│   ├── test_presets.py          # GET /api/v1/presets
+│   ├── test_layers.py           # GET /api/v1/layers/{slug}
+│   ├── test_validate.py         # POST /api/v1/validate (main business logic)
+│   └── fixtures/
+│       ├── building_in_zone.geojson
+│       └── building_clear.geojson
 ```
 
 ---
 
 ## Fixtures
 
-### Temporary Directories
+### conftest.py
 
 ```python
+# conftest.py
+import pytest
+from fastapi.testclient import TestClient
+from main import app
+
+
 @pytest.fixture
-def app_data_dir(tmp_path: Path) -> Path:
-    data_dir = tmp_path / "data"
-    data_dir.mkdir()
-    return data_dir
+def client():
+    """FastAPI TestClient — real HTTP, real Shapely, no mocks."""
+    return TestClient(app)
+
+
+@pytest.fixture
+def building_in_zone() -> dict:
+    """Building polygon that intersects a protection zone."""
+    return {
+        "type": "Polygon",
+        "coordinates": [[
+            [48.7440, 55.7515],
+            [48.7443, 55.7515],
+            [48.7443, 55.7517],
+            [48.7440, 55.7517],
+            [48.7440, 55.7515],
+        ]]
+    }
+
+
+@pytest.fixture
+def building_outside_zones() -> dict:
+    """Building polygon in a clear area."""
+    return {
+        "type": "Polygon",
+        "coordinates": [[
+            [48.7500, 55.7550],
+            [48.7503, 55.7550],
+            [48.7503, 55.7552],
+            [48.7500, 55.7552],
+            [48.7500, 55.7550],
+        ]]
+    }
 ```
 
-### Environment Override
+Key rules for fixtures:
+
+- Use **real coordinates near Innopolis** (lon ~48.74, lat ~55.75)
+- GeoJSON fixtures use real polygons, not abstract shapes
+- The `client` fixture tests the full FastAPI stack (CORS, lifespan, routing)
+- Shapely buffers use **pyproj UTM (EPSG:32639)** for metric accuracy
+
+---
+
+## Test Patterns
+
+### test_health.py — Health Check
 
 ```python
-@pytest.fixture
-def isolated_env(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> tuple[Path, Path]:
-    config = tmp_path / "config"
-    data = tmp_path / "data"
-    config.mkdir()
-    data.mkdir()
-    monkeypatch.setenv("XDG_CONFIG_HOME", str(config))
-    monkeypatch.setenv("XDG_DATA_HOME", str(data))
-    return config, data
+def test_health_returns_ok(client):
+    response = client.get("/health")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "ok"
 ```
 
-### Sample Data
+### test_presets.py — Building Presets
 
 ```python
-@pytest.fixture
-def sample_audio_16khz() -> np.ndarray:
-    return np.zeros(16000, dtype=np.float32)  # 1 second of silence
+def test_presets_returns_five(client):
+    response = client.get("/api/v1/presets")
+    assert response.status_code == 200
+    presets = response.json()
+    assert len(presets) == 5
+
+def test_presets_have_required_fields(client):
+    response = client.get("/api/v1/presets")
+    presets = response.json()
+    for preset in presets:
+        assert "name" in preset
+        assert "geometry" in preset
 ```
 
-### HTTP Server Mock (Real Server, Not Patched)
+### test_layers.py — GeoJSON Layers
 
 ```python
-@pytest.fixture
-def mock_api(httpserver: HTTPServer) -> HTTPServer:
-    httpserver.expect_request("/api/data").respond_with_json({"status": "ok"})
-    return httpserver
+def test_layers_returns_feature_collection(client):
+    response = client.get("/api/v1/layers/cadastral")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["type"] == "FeatureCollection"
+    assert len(data["features"]) > 0
 
-def test_fetch_from_api(mock_api: HTTPServer) -> None:
-    result = fetch_data(mock_api.url_for("/api/data"))
-    assert result.is_ok
+def test_layers_unknown_slug_404(client):
+    response = client.get("/api/v1/layers/nonexistent")
+    assert response.status_code == 404
 ```
+
+### test_validate.py — Geometry Validation (Main Business Logic)
+
+```python
+def test_validate_building_in_zone_returns_conflicts(client, building_in_zone):
+    """Building inside a protection zone must return conflicts."""
+    response = client.post("/api/v1/validate", json={
+        "geometry": building_in_zone,
+        "preset": "residential",
+    })
+    assert response.status_code == 200
+    data = response.json()
+    assert data["valid"] is False
+    assert len(data["conflicts"]) > 0
+
+
+def test_validate_building_outside_zones_returns_valid(client, building_outside_zones):
+    """Building in a clear area must pass validation."""
+    response = client.post("/api/v1/validate", json={
+        "geometry": building_outside_zones,
+        "preset": "residential",
+    })
+    assert response.status_code == 200
+    data = response.json()
+    assert data["valid"] is True
+    assert len(data["conflicts"]) == 0
+
+
+def test_validate_setback_violation(client):
+    """Building that clears zone boundary but violates setback buffer.
+
+    The setback buffer is computed via pyproj UTM (EPSG:32639) for metric
+    accuracy. A building just outside a zone polygon may still fail if it
+    falls within the required setback distance.
+    """
+    # Polygon barely outside a protection zone — within setback buffer
+    near_miss_building = {
+        "type": "Polygon",
+        "coordinates": [[
+            [48.7441, 55.7518],
+            [48.7443, 55.7518],
+            [48.7443, 55.7519],
+            [48.7441, 55.7519],
+            [48.7441, 55.7518],
+        ]]
+    }
+    response = client.post("/api/v1/validate", json={
+        "geometry": near_miss_building,
+        "preset": "residential",
+    })
+    assert response.status_code == 200
+    data = response.json()
+    # Should report setback violation even though not directly intersecting
+    assert data["valid"] is False
+
+
+def test_validate_invalid_geometry(client):
+    """Malformed geometry must return a clear error."""
+    response = client.post("/api/v1/validate", json={
+        "geometry": {"type": "Polygon", "coordinates": []},
+        "preset": "residential",
+    })
+    assert response.status_code == 422
+```
+
+---
+
+## Key Rules
+
+1. **Never mock Shapely** — test with real geometry operations
+2. **Never mock GeoJSON** — use real files from `backend/data/` or realistic coordinates
+3. **TestClient tests the full FastAPI stack** — CORS middleware, lifespan events, routing
+4. **Each endpoint: minimum 2 tests** — happy path + edge case
+5. **Shapely buffers use pyproj UTM (EPSG:32639)** for metric accuracy
+6. **Real coordinates near Innopolis** — lon ~48.74, lat ~55.75
+7. **No separate mock servers** — the real backend is the fixture for both pytest and Playwright
 
 ---
 
 ## Running Tests
 
 ```bash
-uv run poe test                    # All tests
-uv run pytest tests/unit/          # Unit only
-uv run pytest tests/integration/   # Integration only
-uv run pytest -m "not slow"        # Skip slow tests
-uv run pytest --cov                # With coverage report
+cd backend && uv run pytest                         # All tests
+cd backend && uv run pytest -v                      # Verbose
+cd backend && uv run pytest tests/test_validate.py  # Specific file
+cd backend && uv run pytest -k "test_validate"      # By name pattern
+cd backend && uv run basedpyright                   # Type checking
+cd backend && uv run ruff check                     # Linting
 ```
 
 ---
@@ -204,201 +268,20 @@ Not targets to chase, but sanity checks:
 
 | Area | Guideline |
 |------|-----------|
-| Core business logic | >70% |
-| CLI commands | >70% |
-| UI components | >40% |
+| Validation logic (Shapely) | >80% |
+| API endpoints | >70% |
+| Data loading (GeoJSON) | >60% |
 | Utilities | As needed |
 
-If coverage is low but e2e tests cover the workflows, that's fine.
+If e2e Playwright tests cover the workflows end-to-end, lower pytest coverage is fine.
 
 ---
 
 ## Test Validation
 
-After all tests are written and passing, dispatch a separate sub-agent to validate test quality. The validation agent must check:
+After all tests are written and passing, validate test quality:
 
-- **Meaningful coverage** — are tests verifying real behavior, or just producing green checkmarks by testing getters/setters/trivial glue?
-- **Correctness** — are assertions actually testing the right thing? No tautologies, no asserting mocks return what they were told to return.
-- **No source code compromises** — was production code incorrectly adjusted just to make tests pass? Logic changes that serve tests rather than users are bugs.
-- **No shortcuts** — no `# type: ignore` to silence test failures, no overly broad exception catching, no tests that pass regardless of input.
-
-This step is mandatory before submitting work as complete.
-
----
-
-## Heavyweight Testing
-
-When lightweight testing isn't enough. Same philosophy, higher infrastructure complexity.
-
-**Status: Design document. Not yet fully implemented.**
-
-### When to Use
-
-- Project has external dependencies (APIs, databases, system services)
-- Features depend on specific system state (installed binaries, running daemons)
-- Integration failures are costly or hard to debug
-- Project is long-lived and maintained by multiple people
-
-### Investment Decision
-
-Ask before building heavyweight infrastructure:
-
-1. Will this project live long enough to justify the setup time?
-2. Are integration failures actually happening or just theoretical?
-3. Can lightweight testing (real tmp dirs, pytest-httpserver) cover 80% of the risk?
-
-If yes to all three: build it. If not: stick with lightweight.
-
-### Core Idea
-
-| Instead of... | Use... |
-|---------------|--------|
-| `@patch("requests.get")` | Real HTTP server (pytest-httpserver or custom) |
-| `@patch("subprocess.run")` | Custom lightweight binary that mimics the real one |
-| `unittest.mock.Mock()` for DB | Real database in container |
-| Monkeypatched file operations | Real filesystem in tmp_path or container volume |
-| Mocked system services (DBus) | Real daemon instance for tests |
-
-### Containerized Test Environments
-
-```
-tests/
-├── containers/
-│   ├── Dockerfile.test-env        # Base test environment
-│   ├── Dockerfile.mock-api        # Mock API server
-│   ├── docker-compose.test.yml    # Orchestration
-│   └── mock-bins/                 # Custom mock binaries
-│       ├── mock-telegram          # Fake Telegram Desktop
-│       └── mock-ffmpeg            # Fake ffmpeg (returns predefined output)
-├── integration/
-│   └── test_with_containers.py
-└── conftest.py                    # Container lifecycle fixtures
-```
-
-### Docker Compose for Test Services
-
-```yaml
-# tests/containers/docker-compose.test.yml
-services:
-  mock-api:
-    build:
-      context: .
-      dockerfile: Dockerfile.mock-api
-    ports:
-      - "18080:8080"
-
-  test-db:
-    image: postgres:16-alpine
-    environment:
-      POSTGRES_DB: test
-      POSTGRES_PASSWORD: test
-    ports:
-      - "15432:5432"
-```
-
-### Container Lifecycle Fixture
-
-```python
-@pytest.fixture(scope="session")
-def test_services():
-    """Start all test containers, yield, then tear down."""
-    compose_file = Path(__file__).parent / "containers" / "docker-compose.test.yml"
-    subprocess.run(
-        ["podman-compose", "-f", str(compose_file), "up", "-d", "--wait"],
-        check=True,
-    )
-    yield
-    subprocess.run(
-        ["podman-compose", "-f", str(compose_file), "down", "-v"],
-        check=True,
-    )
-```
-
-### Mock Binaries
-
-Instead of patching `subprocess.run()`, provide a real binary that behaves predictably:
-
-```python
-#!/bin/env python3
-# tests/containers/mock-bins/mock-telegram
-import sys, time, os
-
-print("Telegram Desktop Mock v1.0")
-print(f"Working directory: {os.getcwd()}")
-
-if "-many" in sys.argv and "-workdir" in sys.argv:
-    print(f"Mock Telegram started in {sys.argv[sys.argv.index('-workdir') + 1]}")
-    time.sleep(int(os.environ.get("MOCK_TELEGRAM_LIFETIME", "5")))
-    sys.exit(0)
-
-print("Unknown arguments", sys.argv, file=sys.stderr)
-sys.exit(1)
-```
-
-```python
-@pytest.fixture
-def mock_telegram_bin(tmp_path: Path) -> Path:
-    mock_bin = tmp_path / "telegram"
-    mock_bin.write_text(MOCK_TELEGRAM_SCRIPT)
-    mock_bin.chmod(0o755)
-    return mock_bin
-
-async def test_start_instance(mock_telegram_bin: Path) -> None:
-    result = await start_instance(profile, binary_path=mock_telegram_bin)
-    assert result.is_ok
-    pid = result.unwrap()
-    assert pid > 0
-```
-
-### Stateful Mock API
-
-For APIs that need to maintain state across requests:
-
-```python
-from http.server import HTTPServer, BaseHTTPRequestHandler
-import threading, json
-
-class MockAPIHandler(BaseHTTPRequestHandler):
-    profiles: dict[str, dict[str, object]] = {}
-
-    def do_POST(self) -> None:
-        if self.path == "/api/profiles":
-            data = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
-            self.profiles[data["id"]] = data
-            self.send_response(201)
-            self.end_headers()
-            self.wfile.write(json.dumps(data).encode())
-
-    def do_GET(self) -> None:
-        if self.path == "/api/profiles":
-            self.send_response(200)
-            self.end_headers()
-            self.wfile.write(json.dumps(list(self.profiles.values())).encode())
-
-@pytest.fixture(scope="session")
-def mock_api() -> Generator[str, None, None]:
-    server = HTTPServer(("127.0.0.1", 0), MockAPIHandler)
-    port = server.server_address[1]
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    yield f"http://127.0.0.1:{port}"
-    server.shutdown()
-```
-
-### Real Service Testing (DBus)
-
-```python
-@pytest.fixture(scope="session")
-def dbus_session() -> Generator[str, None, None]:
-    """Start a real DBus session daemon for tests."""
-    process = subprocess.Popen(
-        ["dbus-daemon", "--session", "--print-address", "--nofork"],
-        stdout=subprocess.PIPE,
-    )
-    address = process.stdout.readline().decode().strip()
-    os.environ["DBUS_SESSION_BUS_ADDRESS"] = address
-    yield address
-    process.terminate()
-    process.wait()
-```
-
+- **Meaningful coverage** — are tests verifying real geometry behavior, or just producing green checkmarks?
+- **Correctness** — are assertions testing the right thing? No tautologies, no asserting mocks return what they were told to return.
+- **No source code compromises** — was production code incorrectly adjusted just to make tests pass?
+- **No shortcuts** — no `# type: ignore` to silence test failures, no overly broad exception catching.

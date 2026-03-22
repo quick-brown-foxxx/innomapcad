@@ -1,0 +1,6 @@
+{
+  "name": "innomapcad-test-extension",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Minimal test extension for Chrome DevTools MCP integration"
+}

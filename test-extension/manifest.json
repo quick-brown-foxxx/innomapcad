@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "InnoMapCAD Test Extension",
+  "version": "0.1.0",
+  "description": "Minimal test extension for MCP integration testing",
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
