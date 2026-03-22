@@ -1,6 +1,11 @@
 {
   "version": 1,
   "skills": {
+    "building-api-clients": {
+      "source": "quick-brown-foxxx/coding_rules_ts",
+      "sourceType": "github",
+      "computedHash": "97b996f8287b7c4fb8e9088702a541cb394239d3012db7a592bbb46a83c9bf35"
+    },
     "building-multi-ui-apps": {
       "source": "quick-brown-foxxx/coding_rules_python",
       "sourceType": "github",
@@ -11,10 +16,25 @@
       "sourceType": "github",
       "computedHash": "3dd27aef5363644b21b95b7738562df9ef10cf5d1a365d8504d07cb2d8cbfd3f"
     },
+    "building-ui-components": {
+      "source": "quick-brown-foxxx/coding_rules_ts",
+      "sourceType": "github",
+      "computedHash": "1dbcc28bf226aa8da32c181bbdbd3dc7cef5abea6caa3b9bc92e8c14361e23b1"
+    },
+    "managing-state": {
+      "source": "quick-brown-foxxx/coding_rules_ts",
+      "sourceType": "github",
+      "computedHash": "ba16124ccaf9bee5c6a3c937916f6c44d2ff6cd9eae6df3c24e485a541b763a3"
+    },
     "setting-up-logging": {
       "source": "quick-brown-foxxx/coding_rules_python",
       "sourceType": "github",
       "computedHash": "2fddff38302bc1bbcd1862e4cf3311250d44b3d8f50e5603aa7879d8087fe323"
+    },
+    "setting-up-nextjs-projects": {
+      "source": "quick-brown-foxxx/coding_rules_ts",
+      "sourceType": "github",
+      "computedHash": "28945807005a5aa56b23c2df332234fc3666e3a420a76e06fdc5a79c81be5553"
     },
     "setting-up-python-projects": {
       "source": "quick-brown-foxxx/coding_rules_python",
@@ -31,6 +51,11 @@
       "sourceType": "github",
       "computedHash": "cd0fccaf5112cc0a78773859c27c61cb4a4f5aa8eab78c4f58110ed4a43761a3"
     },
+    "testing-react-ts": {
+      "source": "quick-brown-foxxx/coding_rules_ts",
+      "sourceType": "github",
+      "computedHash": "7c981335707bb12486264c9f3ad8329810564fb1c77e90ce04edea7538bd533f"
+    },
     "writing-python-code": {
       "source": "quick-brown-foxxx/coding_rules_python",
       "sourceType": "github",
@@ -40,6 +65,11 @@
       "source": "quick-brown-foxxx/coding_rules_python",
       "sourceType": "github",
       "computedHash": "e3ccd0949cfcd8b4b3cb7a940d2a5b510c98f37563e23108ab0ad68ca6c3b9b3"
+    },
+    "writing-react-ts-code": {
+      "source": "quick-brown-foxxx/coding_rules_ts",
+      "sourceType": "github",
+      "computedHash": "bbdce8b0271bd6f5081f9bb60b14b6137dacbe93c29fc191f58953ee7d4a26c9"
     }
   }
 }
