@@ -76,7 +76,7 @@ body
 
 ### Mapbox token (из бандла)
 ```
-REDACTED
+xxx
 ```
 
 ### Basemap стили
