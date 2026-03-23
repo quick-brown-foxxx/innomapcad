@@ -55,4 +55,38 @@ export const LAYER_COLORS = {
 export const LAYER_IDS = {
   cadastral: 'cadastral-layer',
   protectionZones: 'protection-zones-layer',
+  placedBuilding: 'placed-building-layer',
 } as const;
+
+interface SolidPolygonLayerOptions {
+  readonly color: readonly [number, number, number, number];
+  readonly height: number;
+}
+
+/**
+ * Creates a plain-JSON config for a deck.gl SolidPolygonLayer (extruded 3D).
+ * Used for building placement.
+ */
+export function createSolidPolygonLayerConfig(
+  id: string,
+  polygon: ReadonlyArray<readonly [number, number]>,
+  options: SolidPolygonLayerOptions,
+): LayerConfig {
+  return {
+    id,
+    type: 'SolidPolygonLayer',
+    props: {
+      data: [
+        {
+          polygon: polygon.map((coord) => [...coord, 0]),
+          height: options.height,
+        },
+      ],
+      getPolygon: 'polygon',
+      getElevation: 'height',
+      getFillColor: [...options.color],
+      extruded: true,
+      pickable: true,
+    },
+  };
+}

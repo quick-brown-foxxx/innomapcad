@@ -1,12 +1,20 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 
+import {
+  createSolidPolygonLayerConfig,
+  LAYER_IDS,
+} from './bridge/layer-config';
 import { FloatingPanel } from './components/FloatingPanel';
 import { loadBackendData, subscribeToVisibilityChanges } from './services/data-loader';
 import { useDeckStore } from './stores/deck-store';
+import { usePlacementStore } from './stores/placement-store';
+import { usePresetsStore } from './stores/presets-store';
 import { useUIStore } from './stores/ui-store';
 import { PANEL_CSS } from './styles/panel';
+import { createBuildingPolygon } from './utils/building-geometry';
 
+import type { Preset } from './lib/schemas';
 import type { LayerConfig } from './bridge/deck-types';
 
 /** Maximum time (ms) to wait for the deck.gl overlay element. */
@@ -151,6 +159,128 @@ function mountPanel(): void {
   );
 }
 
+// ---- Preset / Placement fallbacks ----
+
+/** Hardcoded fallback presets for when backend is unavailable. */
+const FALLBACK_PRESETS: readonly Preset[] = [
+  { slug: 'residential', name: 'Жилой дом', width_m: 24, length_m: 60, floors: 9, height_m: 27, setback_m: 5, color: '#4A90D9' },
+  { slug: 'office', name: 'Офисное здание', width_m: 30, length_m: 50, floors: 5, height_m: 18, setback_m: 5, color: '#50C878' },
+  { slug: 'transformer', name: 'ТП', width_m: 6, length_m: 4, floors: 1, height_m: 3, setback_m: 2, color: '#FFD700' },
+  { slug: 'parking', name: 'Парковка', width_m: 40, length_m: 20, floors: 1, height_m: 3, setback_m: 3, color: '#808080' },
+  { slug: 'warehouse', name: 'Склад', width_m: 50, length_m: 30, floors: 1, height_m: 8, setback_m: 5, color: '#CD853F' },
+];
+
+/**
+ * Finds a preset by slug, checking the presets store first then fallbacks.
+ */
+function findPreset(slug: string): Preset | undefined {
+  const storePresets = usePresetsStore.getState().presets;
+  const presets = storePresets.length > 0 ? storePresets : FALLBACK_PRESETS;
+  return presets.find((p) => p.slug === slug);
+}
+
+/**
+ * Parses a hex color string (e.g. '#4A90D9') to an RGBA tuple.
+ */
+function hexToRgba(hex: string, alpha: number): readonly [number, number, number, number] {
+  const cleaned = hex.replace('#', '');
+  const r = parseInt(cleaned.substring(0, 2), 16);
+  const g = parseInt(cleaned.substring(2, 4), 16);
+  const b = parseInt(cleaned.substring(4, 6), 16);
+  return [
+    Number.isNaN(r) ? 0 : r,
+    Number.isNaN(g) ? 0 : g,
+    Number.isNaN(b) ? 0 : b,
+    alpha,
+  ] as const;
+}
+
+// ---- Placement wiring ----
+
+/**
+ * Subscribes to selectedPreset changes and dispatches start/stop placing events
+ * to the page-context script.
+ */
+function subscribeToPresetChanges(): void {
+  useUIStore.subscribe((state, prevState) => {
+    if (state.selectedPreset !== prevState.selectedPreset) {
+      if (state.selectedPreset !== null) {
+        usePlacementStore.getState().startPlacing();
+        document.dispatchEvent(new CustomEvent('innomapcad:start-placing'));
+      } else {
+        usePlacementStore.getState().stopPlacing();
+        document.dispatchEvent(new CustomEvent('innomapcad:stop-placing'));
+      }
+    }
+  });
+}
+
+interface MapCoordDetail {
+  readonly lng: number;
+  readonly lat: number;
+}
+
+/**
+ * Adds the placed building as a SolidPolygonLayer to the deck store.
+ */
+function addBuildingLayer(
+  polygon: ReadonlyArray<readonly [number, number]>,
+  color: readonly [number, number, number, number],
+  height: number,
+): void {
+  const deckStore = useDeckStore.getState();
+  // Remove existing building layer if present, then add new one
+  deckStore.removeLayer(LAYER_IDS.placedBuilding);
+  const layerConfig = createSolidPolygonLayerConfig(
+    LAYER_IDS.placedBuilding,
+    polygon,
+    { color, height },
+  );
+  deckStore.addLayer(layerConfig);
+}
+
+/**
+ * Listens for map-click events from the page script and places a building.
+ */
+function listenForMapClick(): void {
+  document.addEventListener('innomapcad:map-click', ((event: CustomEvent<MapCoordDetail>) => {
+    const { lng, lat } = event.detail;
+    const selectedSlug = useUIStore.getState().selectedPreset;
+    if (selectedSlug === null) {
+      return;
+    }
+
+    const preset = findPreset(selectedSlug);
+    if (preset === undefined) {
+      return;
+    }
+
+    const polygon = createBuildingPolygon([lng, lat], preset.width_m, preset.length_m);
+    const color = hexToRgba(preset.color, 200);
+
+    usePlacementStore.getState().placeBuilding({
+      center: [lng, lat],
+      presetSlug: selectedSlug,
+      polygon,
+    });
+
+    addBuildingLayer(polygon.coordinates[0], color, preset.height_m);
+
+    // Stop placing mode on the page side (cursor reset)
+    document.dispatchEvent(new CustomEvent('innomapcad:stop-placing'));
+  }) as EventListener);
+}
+
+/**
+ * Listens for map-hover events from the page script and updates hover position.
+ */
+function listenForMapHover(): void {
+  document.addEventListener('innomapcad:map-hover', ((event: CustomEvent<MapCoordDetail>) => {
+    const { lng, lat } = event.detail;
+    usePlacementStore.getState().setHoverPosition([lng, lat]);
+  }) as EventListener);
+}
+
 /**
  * Entry point: waits for deck.gl overlay, injects bridge, then mounts the extension panel.
  */
@@ -162,6 +292,9 @@ async function init(): Promise<void> {
     listenForDeckReady();
     subscribeToLayerUpdates();
     subscribeToVisibilityChanges();
+    subscribeToPresetChanges();
+    listenForMapClick();
+    listenForMapHover();
 
     // Inject the page-context script for fiber walk + setProps patching
     injectPageScript();

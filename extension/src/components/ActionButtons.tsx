@@ -1,5 +1,8 @@
 import React from 'react';
 
+import { LAYER_IDS } from '@/bridge/layer-config';
+import { useDeckStore } from '@/stores/deck-store';
+import { usePlacementStore } from '@/stores/placement-store';
 import { useUIStore } from '@/stores/ui-store';
 import { THEME } from '@/styles/theme';
 
@@ -38,22 +41,32 @@ const removeButtonStyle = (disabled: boolean): React.CSSProperties => ({
 
 export function ActionButtons(): React.JSX.Element {
   const selectedPreset = useUIStore((s) => s.selectedPreset);
-  const isDisabled = selectedPreset === null;
+  const placedBuilding = usePlacementStore((s) => s.placedBuilding);
+  const removeBuilding = usePlacementStore((s) => s.removeBuilding);
+  const removeLayer = useDeckStore((s) => s.removeLayer);
+  const isValidateDisabled = selectedPreset === null;
+  const isRemoveDisabled = placedBuilding === null;
+
+  function handleRemoveBuilding(): void {
+    removeBuilding();
+    removeLayer(LAYER_IDS.placedBuilding);
+  }
 
   return (
     <div style={containerStyle}>
       <button
         type="button"
-        style={validateButtonStyle(isDisabled)}
-        disabled={isDisabled}
+        style={validateButtonStyle(isValidateDisabled)}
+        disabled={isValidateDisabled}
         aria-label="Проверить размещение"
       >
         {'Проверить'}
       </button>
       <button
         type="button"
-        style={removeButtonStyle(isDisabled)}
-        disabled={isDisabled}
+        style={removeButtonStyle(isRemoveDisabled)}
+        disabled={isRemoveDisabled}
+        onClick={handleRemoveBuilding}
         aria-label="Убрать объект"
       >
         {'Убрать объект'}

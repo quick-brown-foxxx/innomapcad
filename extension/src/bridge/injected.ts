@@ -191,7 +191,114 @@ function reapplyCustomLayers(): void {
   }
 }
 
+// ---- Map click / hover handling for placement mode ----
+
+let placingActive = false;
+let deckCanvas: HTMLCanvasElement | null = null;
+
+interface MapCoordEvent {
+  readonly lng: number;
+  readonly lat: number;
+}
+
+/**
+ * Resolves [lng, lat] from a mouse event by unprojecting pixel coordinates
+ * using the deck.gl viewState found on the fiber tree.
+ */
+function getMapCoordinates(event: MouseEvent): MapCoordEvent | null {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+  const deckGlobal = (window as any).deck;
+  if (deckGlobal === null || deckGlobal === undefined) {
+    return null;
+  }
+
+  const canvas = document.querySelector('#deckgl-overlay');
+  if (canvas === null) {
+    return null;
+  }
+
+  const deck = findDeckInstance(canvas);
+  if (deck === null) {
+    return null;
+  }
+
+  // Try to use deck.pickObject to get coordinates
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-explicit-any
+  const viewports = (deck as any).getViewports?.();
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+  const viewport = Array.isArray(viewports) ? viewports[0] : undefined;
+
+  if (viewport !== undefined) {
+    const rect = canvas.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
+    const lngLat = viewport.unproject([x, y]);
+    if (Array.isArray(lngLat) && lngLat.length >= 2) {
+      return { lng: Number(lngLat[0]), lat: Number(lngLat[1]) };
+    }
+  }
+
+  return null;
+}
+
+function handleMapClick(event: MouseEvent): void {
+  if (!placingActive) {
+    return;
+  }
+  const coords = getMapCoordinates(event);
+  if (coords === null) {
+    return;
+  }
+  document.dispatchEvent(
+    new CustomEvent<MapCoordEvent>('innomapcad:map-click', { detail: coords }),
+  );
+}
+
+function handleMapHover(event: MouseEvent): void {
+  if (!placingActive) {
+    return;
+  }
+  const coords = getMapCoordinates(event);
+  if (coords === null) {
+    return;
+  }
+  document.dispatchEvent(
+    new CustomEvent<MapCoordEvent>('innomapcad:map-hover', { detail: coords }),
+  );
+}
+
+function enablePlacementListeners(): void {
+  placingActive = true;
+  if (deckCanvas !== null) {
+    return;
+  }
+  const canvas = document.querySelector('#deckgl-overlay');
+  if (canvas instanceof HTMLCanvasElement) {
+    deckCanvas = canvas;
+    deckCanvas.addEventListener('click', handleMapClick);
+    deckCanvas.addEventListener('mousemove', handleMapHover);
+    deckCanvas.style.cursor = 'crosshair';
+  }
+}
+
+function disablePlacementListeners(): void {
+  placingActive = false;
+  if (deckCanvas !== null) {
+    deckCanvas.style.cursor = '';
+    // Keep listeners attached but inactive via placingActive flag
+  }
+}
+
 // ---- Event listeners ----
+
+document.addEventListener('innomapcad:start-placing', () => {
+  enablePlacementListeners();
+});
+
+document.addEventListener('innomapcad:stop-placing', () => {
+  disablePlacementListeners();
+});
 
 document.addEventListener('innomapcad:update-layers', ((event: CustomEvent<readonly LayerConfig[]>) => {
   customLayers = event.detail;
