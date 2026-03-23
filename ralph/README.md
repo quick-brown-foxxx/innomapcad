@@ -14,9 +14,11 @@ Ralph is an autonomous AI agent loop that implements features story-by-story fro
 ```
 ralph/
 ├── ralph.sh              # Main orchestration loop
+├── yq.sh                 # yq wrapper (auto-downloads on first use)
 ├── RALPH.md              # Prompt template (don't edit for runs)
 ├── README.md             # This file
-├── current/              # Current run state
+├── .bin/                 # Auto-downloaded binaries (gitignored)
+├── current/              # Current run state (gitignored)
 │   ├── RALPH.md          # Customized prompt for this run
 │   ├── prd.yaml          # Feature PRD in YAML
 │   └── progress.txt      # Append-only progress log
@@ -25,6 +27,8 @@ ralph/
         ├── prd.yaml
         └── progress.txt
 ```
+
+> **Note:** `yq` is auto-downloaded on first use -- no manual install needed.
 
 ## Usage
 
