@@ -370,6 +370,31 @@ function listenForMapHover(): void {
 }
 
 /**
+ * Subscribes to rotationDeg changes and re-renders the placed building
+ * with the new rotation angle.
+ */
+function subscribeToRotationChanges(): void {
+  usePlacementStore.subscribe((state, prevState) => {
+    if (state.rotationDeg !== prevState.rotationDeg && state.placedBuilding !== null) {
+      const building = state.placedBuilding;
+      const preset = findPreset(building.presetSlug);
+      if (preset === undefined) return;
+
+      const polygon = createRotatedBuildingPolygon(
+        building.center,
+        preset.width_m,
+        preset.length_m,
+        state.rotationDeg,
+      );
+
+      // Re-run validation with the rotated polygon
+      const color = hexToRgba(preset.color, 200);
+      runBuildingValidation(polygon, color, preset.height_m);
+    }
+  });
+}
+
+/**
  * Entry point: waits for deck.gl overlay, injects bridge, then mounts the extension panel.
  * If deck.gl is not found within the timeout, the panel is still mounted in degraded mode.
  */
@@ -391,6 +416,7 @@ async function init(): Promise<void> {
     subscribeToPresetChanges();
     listenForMapClick();
     listenForMapHover();
+    subscribeToRotationChanges();
 
     // Inject the page-context script for fiber walk + setProps patching
     injectPageScript();

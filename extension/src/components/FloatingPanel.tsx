@@ -1,12 +1,14 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 import { reloadBackendData } from '@/services/data-loader';
+import { usePlacementStore } from '@/stores/placement-store';
 import { useUIStore } from '@/stores/ui-store';
 import { THEME } from '@/styles/theme';
 
 import { ActionButtons } from './ActionButtons';
 import { LayerToggles } from './LayerToggles';
 import { PresetPalette } from './PresetPalette';
+import { RotationTooltip } from './RotationTooltip';
 import { ValidationStatus } from './ValidationStatus';
 
 const PANEL_WIDTH = 320;
@@ -66,6 +68,7 @@ export function FloatingPanel(): React.JSX.Element {
   const panelCollapsed = useUIStore((s) => s.panelCollapsed);
   const togglePanel = useUIStore((s) => s.togglePanel);
   const deckGlFound = useUIStore((s) => s.deckGlFound);
+  const placedBuilding = usePlacementStore((s) => s.placedBuilding);
 
   const [position, setPosition] = useState({
     top: PANEL_MARGIN,
@@ -204,6 +207,7 @@ export function FloatingPanel(): React.JSX.Element {
           <div className="innomap-section">
             <h4>{'\u0421\u0442\u0430\u0442\u0443\u0441'}</h4>
             <ValidationStatus />
+            {placedBuilding !== null && <RotationTooltip />}
           </div>
 
           <div className="innomap-section">
