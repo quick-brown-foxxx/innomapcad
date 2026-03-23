@@ -139,26 +139,31 @@ function instantiateLayer(config: LayerConfig): unknown {
 // ---- SetProps patching ----
 
 let customLayers: readonly LayerConfig[] = [];
-let originalSetProps: ((props: Record<string, unknown>) => void) | null = null;
-let patchedDeck: DeckLike | null = null;
+
+/** Brand symbol to detect our own patched setProps and avoid wrapping it. */
+const PATCH_BRAND = '__innomapcad_patched__';
+
+/** The true native setProps, captured exactly once. Never overwritten. */
+let nativeSetProps: ((props: Record<string, unknown>) => void) | null = null;
 
 function patchSetProps(deck: DeckLike): void {
-  // If we already patched THIS deck instance, skip
-  if (patchedDeck === deck) {
+  // Already patched (by us) — the brand is on the function
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+  if ((deck.setProps as any)[PATCH_BRAND] === true) {
     return;
   }
 
-  // Capture the native (unpatched) setProps from this deck instance.
-  // This runs on first patch OR when a genuinely new deck instance appears.
-  // Key invariant: never store a patched function as the "original".
-  originalSetProps = deck.setProps.bind(deck);
+  // Capture the true native setProps exactly once
+  if (nativeSetProps === null) {
+    nativeSetProps = deck.setProps.bind(deck);
+  }
 
-  patchedDeck = deck;
+  const callNative = nativeSetProps;
 
-  const savedOriginal = originalSetProps;
-
-  deck.setProps = (props: Record<string, unknown>): void => {
-    if (savedOriginal === null) {
+  const patchedFn = (props: Record<string, unknown>): void => {
+    if (customLayers.length === 0) {
+      // Fast path: no custom layers, pass through unchanged
+      callNative(props);
       return;
     }
 
@@ -178,8 +183,14 @@ function patchSetProps(deck: DeckLike): void {
       return layer;
     });
 
-    savedOriginal({ ...props, layers: instantiated });
+    callNative({ ...props, layers: instantiated });
   };
+
+  // Brand the function so we never wrap our own wrapper
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
+  (patchedFn as any)[PATCH_BRAND] = true;
+
+  deck.setProps = patchedFn;
 }
 
 /**
@@ -187,16 +198,8 @@ function patchSetProps(deck: DeckLike): void {
  * Used when custom layers change via the update-layers event.
  */
 function reapplyCustomLayers(): void {
-  if (originalSetProps === null) {
-    return;
-  }
-
-  // Instantiate and push custom layers directly
-  const instantiated = customLayers.map((layer) => instantiateLayer(layer));
-  if (instantiated.length > 0) {
-    // Trigger a minimal setProps to force a re-render with custom layers
-    // The patched setProps will merge them in on the next frame update
-  }
+  // No-op: custom layers are merged on the next setProps call from deck.gl.
+  // deck.gl calls setProps on every frame, so our layers appear automatically.
 }
 
 // ---- Map click / hover handling for placement mode ----
@@ -365,35 +368,29 @@ function observeReRenders(): void {
     return;
   }
 
-  let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-
-  const observer = new MutationObserver(() => {
-    // Debounce: deck.gl triggers many DOM mutations per frame.
-    // We only need to check for a new deck instance occasionally.
-    if (debounceTimer !== null) {
+  const observer = new MutationObserver((mutations) => {
+    // Only react to actual child additions (canvas replaced by React).
+    // Ignore attribute changes, text changes, or subtree updates.
+    const hasAddedNodes = mutations.some((m) => m.addedNodes.length > 0);
+    if (!hasAddedNodes) {
       return;
     }
 
-    debounceTimer = setTimeout(() => {
-      debounceTimer = null;
+    const canvas = document.querySelector('#deckgl-overlay');
+    if (canvas === null) {
+      return;
+    }
 
-      const canvas = document.querySelector('#deckgl-overlay');
-      if (canvas === null) {
-        return;
-      }
+    const deck = findDeckInstance(canvas);
+    if (deck === null) {
+      return;
+    }
 
-      const deck = findDeckInstance(canvas);
-      if (deck === null) {
-        return;
-      }
-
-      // patchSetProps will skip if this is the same deck instance,
-      // or re-patch with a fresh original if it's a genuinely new instance
-      patchSetProps(deck);
-    }, 500);
+    // patchSetProps checks the brand — skips if already patched
+    patchSetProps(deck);
   });
 
-  // Only watch direct children — subtree fires on every WebGL canvas update
+  // Only watch direct children of wrapper — NOT subtree
   observer.observe(wrapper, {
     childList: true,
     subtree: false,
