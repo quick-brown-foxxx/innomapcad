@@ -1,15 +1,40 @@
 from __future__ import annotations
 
+from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from src.routers.health import router as health_router
+from src.services.data_store import data_store
+
+_ALLOWED_ORIGINS: list[str] = [
+    "https://4dinno.ru",
+]
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncGenerator[None]:
+    """Load GeoJSON data at startup."""
+    data_store.load_from_directory()
+    yield
+
 
 app: FastAPI = FastAPI(
     title="InnoMapCAD",
     version="0.1.0",
     description="Backend service for interactive CAD map editing",
+    lifespan=lifespan,
 )
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_ALLOWED_ORIGINS,
+    allow_origin_regex=r"^http://localhost(:\d+)?$",
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-@app.get("/health")
-async def health() -> dict[str, str]:
-    """Health check endpoint."""
-    return {"status": "ok"}
+app.include_router(health_router)
