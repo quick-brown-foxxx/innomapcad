@@ -5,12 +5,28 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
+from starlette.requests import Request
+from starlette.responses import Response
 
 from src.routers.health import router as health_router
 from src.routers.layers import router as layers_router
 from src.routers.presets import router as presets_router
 from src.routers.validate import router as validate_router
 from src.services.data_store import data_store
+
+
+class PrivateNetworkAccessMiddleware(BaseHTTPMiddleware):
+    """Add Access-Control-Allow-Private-Network header for Chrome PNA preflight."""
+
+    async def dispatch(
+        self, request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:
+        response = await call_next(request)
+        if request.headers.get("Access-Control-Request-Private-Network") == "true":
+            response.headers["Access-Control-Allow-Private-Network"] = "true"
+        return response
+
 
 _ALLOWED_ORIGINS: list[str] = [
     "https://4dinno.ru",
@@ -40,6 +56,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(PrivateNetworkAccessMiddleware)
 
 app.include_router(health_router)
 app.include_router(presets_router)

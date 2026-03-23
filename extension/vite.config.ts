@@ -36,6 +36,39 @@ function buildInjectedScript(): Plugin {
   };
 }
 
+/**
+ * Vite plugin that builds the background service worker as a separate IIFE
+ * bundle. The service worker proxies fetch requests from content scripts to
+ * localhost, bypassing Chrome's Private Network Access restrictions.
+ */
+function buildServiceWorker(): Plugin {
+  return {
+    name: 'build-service-worker',
+    closeBundle: async () => {
+      await build({
+        configFile: false,
+        build: {
+          outDir: 'dist',
+          emptyOutDir: false,
+          rollupOptions: {
+            input: {
+              'service-worker': path.resolve(
+                __dirname,
+                'src/background/service-worker.ts',
+              ),
+            },
+            output: {
+              entryFileNames: '[name].js',
+              format: 'iife',
+              inlineDynamicImports: true,
+            },
+          },
+        },
+      });
+    },
+  };
+}
+
 export default defineConfig({
   build: {
     outDir: 'dist',
@@ -66,6 +99,7 @@ export default defineConfig({
       ],
     }),
     buildInjectedScript(),
+    buildServiceWorker(),
   ],
   test: {
     environment: 'node',

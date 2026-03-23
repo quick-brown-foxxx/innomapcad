@@ -140,17 +140,25 @@ function instantiateLayer(config: LayerConfig): unknown {
 
 let customLayers: readonly LayerConfig[] = [];
 let originalSetProps: ((props: Record<string, unknown>) => void) | null = null;
+let patchedDeck: DeckLike | null = null;
 
 function patchSetProps(deck: DeckLike): void {
-  // Avoid double-patching
-  if (originalSetProps !== null) {
+  // If we already patched THIS deck instance, skip
+  if (patchedDeck === deck) {
     return;
   }
 
+  // Capture the native (unpatched) setProps from this deck instance.
+  // This runs on first patch OR when a genuinely new deck instance appears.
+  // Key invariant: never store a patched function as the "original".
   originalSetProps = deck.setProps.bind(deck);
 
+  patchedDeck = deck;
+
+  const savedOriginal = originalSetProps;
+
   deck.setProps = (props: Record<string, unknown>): void => {
-    if (originalSetProps === null) {
+    if (savedOriginal === null) {
       return;
     }
 
@@ -170,7 +178,7 @@ function patchSetProps(deck: DeckLike): void {
       return layer;
     });
 
-    originalSetProps({ ...props, layers: instantiated });
+    savedOriginal({ ...props, layers: instantiated });
   };
 }
 
@@ -368,8 +376,8 @@ function observeReRenders(): void {
       return;
     }
 
-    // Reset originalSetProps so patchSetProps can re-patch
-    originalSetProps = null;
+    // patchSetProps will skip if this is the same deck instance,
+    // or re-patch with a fresh original if it's a genuinely new instance
     patchSetProps(deck);
   });
 
