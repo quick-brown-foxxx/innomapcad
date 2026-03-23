@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ГИС-САПР Иннополис</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: #0a0a0a;
+    color: #f0f0f0;
+    overflow: hidden;
+    height: 100vh;
+  }
+
+  .slide {
+    display: none;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    padding: 60px 120px;
+    text-align: center;
+  }
+
+  .slide.active { display: flex; }
+
+  h1 {
+    font-size: 3.2rem;
+    font-weight: 700;
+    margin-bottom: 40px;
+    line-height: 1.2;
+  }
+
+  h2 {
+    font-size: 2rem;
+    font-weight: 300;
+    margin-bottom: 48px;
+    color: #aaa;
+    line-height: 1.4;
+  }
+
+  .points {
+    list-style: none;
+    text-align: left;
+    max-width: 900px;
+    width: 100%;
+  }
+
+  .points li {
+    font-size: 1.5rem;
+    line-height: 1.6;
+    margin-bottom: 20px;
+    padding-left: 28px;
+    position: relative;
+    color: #ddd;
+  }
+
+  .points li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 14px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #4A90D9;
+  }
+
+  .highlight { color: #4A90D9; }
+  .warn { color: #e74c3c; }
+  .green { color: #50C878; }
+
+  .badge {
+    display: inline-block;
+    background: #1a1a2e;
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 6px 16px;
+    margin: 4px;
+    font-size: 1.1rem;
+    color: #ccc;
+  }
+
+  .badges { margin-top: 20px; }
+
+  .flow {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    margin: 20px 0;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .flow-box {
+    background: #141428;
+    border: 1px solid #333;
+    border-radius: 12px;
+    padding: 20px 28px;
+    text-align: center;
+    min-width: 180px;
+  }
+
+  .flow-box .label {
+    font-size: 0.85rem;
+    color: #888;
+    margin-bottom: 6px;
+  }
+
+  .flow-box .value {
+    font-size: 1.2rem;
+    color: #f0f0f0;
+  }
+
+  .flow-arrow {
+    font-size: 2rem;
+    color: #4A90D9;
+  }
+
+  .screenshot-placeholder {
+    width: 80%;
+    max-width: 1000px;
+    aspect-ratio: 16/9;
+    border: 2px dashed #333;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #555;
+    font-size: 1.3rem;
+    margin: 30px 0;
+  }
+
+  .screenshot-placeholder img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    border-radius: 16px;
+  }
+
+  .timeline {
+    display: flex;
+    gap: 40px;
+    margin-top: 30px;
+    justify-content: center;
+  }
+
+  .timeline-item {
+    text-align: center;
+  }
+
+  .timeline-item .time {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: #4A90D9;
+  }
+
+  .timeline-item .desc {
+    font-size: 1rem;
+    color: #aaa;
+    margin-top: 8px;
+    max-width: 200px;
+  }
+
+  .alts {
+    display: flex;
+    gap: 32px;
+    margin-top: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .alt-card {
+    background: #141418;
+    border: 1px solid #2a2a2a;
+    border-radius: 12px;
+    padding: 24px 32px;
+    text-align: center;
+    width: 220px;
+  }
+
+  .alt-card .name { font-size: 1.3rem; margin-bottom: 10px; }
+
+  .alt-card .cons {
+    font-size: 0.95rem;
+    color: #e74c3c;
+    line-height: 1.5;
+  }
+
+  .vs-card {
+    background: #0d1a2d;
+    border: 1px solid #4A90D9;
+    border-radius: 12px;
+    padding: 24px 32px;
+    text-align: center;
+    width: 220px;
+  }
+
+  .vs-card .name { font-size: 1.3rem; margin-bottom: 10px; color: #4A90D9; }
+  .vs-card .pros { font-size: 0.95rem; color: #50C878; line-height: 1.5; }
+
+  /* Navigation */
+  .nav {
+    position: fixed;
+    bottom: 30px;
+    right: 40px;
+    display: flex;
+    gap: 12px;
+    z-index: 100;
+  }
+
+  .nav button {
+    background: #1a1a2e;
+    border: 1px solid #333;
+    color: #aaa;
+    padding: 10px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 1rem;
+    transition: all 0.2s;
+  }
+
+  .nav button:hover { background: #2a2a3e; color: #fff; }
+
+  .counter {
+    position: fixed;
+    bottom: 36px;
+    left: 40px;
+    color: #555;
+    font-size: 0.9rem;
+  }
+
+  .title-accent {
+    background: linear-gradient(135deg, #4A90D9, #50C878);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .small { font-size: 1rem; color: #888; margin-top: 16px; }
+</style>
+</head>
+<body>
+
+<!-- Slide 1: Title -->
+<div class="slide active" id="s1">
+  <h1><span class="title-accent">ГИС-САПР</span> для цифрового двойника<br>ОЭЗ «Иннополис»</h1>
+  <h2>Геоинформационные слои и валидация размещения объектов</h2>
+</div>
+
+<!-- Slide 2: Problem -->
+<div class="slide" id="s2">
+  <h1>Проблема</h1>
+  <ul class="points">
+    <li>Проектировщик ОЭЗ не может быстро проверить, <span class="warn">можно ли разместить объект</span> на конкретном участке</li>
+    <li>Кадастровые данные — в <span class="highlight">Росреестре</span>, охранные зоны — в <span class="highlight">реестре ЗОУИТ</span>, двойник — на <span class="highlight">4dinno.ru</span></li>
+    <li><span class="warn">Нет единого инструмента</span>, который объединяет данные и даёт ответ: можно или нельзя</li>
+  </ul>
+</div>
+
+<!-- Slide 3: Twin already exists -->
+<div class="slide" id="s3">
+  <h1>У Иннополиса <span class="green">уже есть</span> двойник</h1>
+  <ul class="points">
+    <li>Платформа <span class="highlight">4dinno.ru</span> — рабочий цифровой двойник с 3D-картой территории</li>
+    <li>Современная архитектура — платформа <span class="green">расширяема</span></li>
+    <li>Не нужно строить с нуля — нужно <span class="highlight">дополнить</span> тем, чего не хватает</li>
+  </ul>
+</div>
+
+<!-- Slide 4: Alternatives -->
+<div class="slide" id="s4">
+  <h1>Альтернативы</h1>
+  <div class="alts">
+    <div class="alt-card">
+      <div class="name">MapInfo / ArcGIS</div>
+      <div class="cons">Дорогие лицензии<br>Не связаны с двойником<br>Требуют обучения</div>
+    </div>
+    <div class="alt-card">
+      <div class="name">QGIS</div>
+      <div class="cons">Отдельное приложение<br>Нет интеграции<br>Сложный интерфейс</div>
+    </div>
+    <div class="alt-card">
+      <div class="name">AutoCAD / BIM</div>
+      <div class="cons">Избыточно<br>Не для ГИС-задач<br>Высокий порог входа</div>
+    </div>
+    <div class="vs-card">
+      <div class="name">Наш подход</div>
+      <div class="pros">Встроено в двойник<br>Знакомый интерфейс<br>Минимальный порог</div>
+    </div>
+  </div>
+</div>
+
+<!-- Slide 5: Our solution -->
+<div class="slide" id="s5">
+  <h1>Решение</h1>
+  <h2>Дополнение к существующему двойнику: <span class="highlight">картографический сервис</span> + <span class="highlight">бэкенд валидации</span></h2>
+  <ul class="points">
+    <li>ГИС-слои появляются <span class="green">прямо в двойнике</span> — без нового софта</li>
+    <li>Проектировщик работает в <span class="highlight">привычном интерфейсе</span></li>
+    <li>Размещает объект → получает мгновенный ответ: <span class="green">можно</span> или <span class="warn">нельзя</span> и почему</li>
+  </ul>
+</div>
+
+<!-- Slide 6: How it works (business) -->
+<div class="slide" id="s6">
+  <h1>Как это работает</h1>
+  <div class="flow">
+    <div class="flow-box">
+      <div class="label">Источники данных</div>
+      <div class="value">НСПД<br>Реестр ЗОУИТ</div>
+    </div>
+    <div class="flow-arrow">&rarr;</div>
+    <div class="flow-box">
+      <div class="label">Обработка</div>
+      <div class="value">Загрузка<br>и форматирование</div>
+    </div>
+    <div class="flow-arrow">&rarr;</div>
+    <div class="flow-box">
+      <div class="label">Бэкенд-сервис</div>
+      <div class="value">Хранение слоёв<br>Геовалидация</div>
+    </div>
+    <div class="flow-arrow">&rarr;</div>
+    <div class="flow-box">
+      <div class="label">Цифровой двойник</div>
+      <div class="value">Визуализация<br>на карте 4dinno.ru</div>
+    </div>
+  </div>
+  <ul class="points" style="margin-top: 32px;">
+    <li>Реальные данные из <span class="highlight">государственных реестров</span> в формате GeoJSON</li>
+    <li>Бэкенд хранит слои и проверяет допустимость размещения по <span class="highlight">геометрии</span></li>
+    <li>Пользователь видит результат <span class="green">в реальном времени</span> на карте двойника</li>
+  </ul>
+</div>
+
+<!-- Slide 7: Screenshot -->
+<div class="slide" id="s7">
+  <h1>Proof of Concept</h1>
+  <div class="screenshot-placeholder">
+    <!-- <img src="screenshot.png" alt="MVP screenshot"> -->
+    Место для скриншота MVP
+  </div>
+  <p class="small">Chrome Extension как демонстрация подхода</p>
+</div>
+
+<!-- Slide 8: Stack (high level) -->
+<div class="slide" id="s8">
+  <h1>Технологический подход</h1>
+  <ul class="points">
+    <li><span class="highlight">Интеграция</span> с существующей картографией двойника — не заменяем, а дополняем</li>
+    <li><span class="highlight">Лёгкий бэкенд-сервис</span> — хранение слоёв и валидация в одном контейнере</li>
+    <li><span class="highlight">Открытые данные</span> из государственных реестров (НСПД, ЗОУИТ)</li>
+    <li><span class="highlight">Контейнеризация</span> — разворачивается за минуты</li>
+  </ul>
+</div>
+
+<!-- Slide 9: Roadmap -->
+<div class="slide" id="s9">
+  <h1>Что дальше</h1>
+  <ul class="points">
+    <li><span class="highlight">Больше слоёв</span> — интеграция с новыми типами данных (красные линии, функциональные зоны, инженерные сети)</li>
+    <li><span class="highlight">Инструменты проектирования</span> — перемещение, поворот, редактирование объектов прямо на карте</li>
+    <li><span class="highlight">Роли и доступы</span> — разграничение для проектировщиков, согласующих, администраторов</li>
+  </ul>
+  <div class="timeline">
+    <div class="timeline-item">
+      <div class="time">1 мес.</div>
+      <div class="desc">Разработка MVP</div>
+    </div>
+    <div class="timeline-item">
+      <div class="time">2 мес.</div>
+      <div class="desc">Административная, юридическая и инженерная интеграция</div>
+    </div>
+    <div class="timeline-item">
+      <div class="time">&infin;</div>
+      <div class="desc">Развитие и масштабирование</div>
+    </div>
+  </div>
+  <p class="small">Главный вызов — получение доступов и данных, а не код</p>
+</div>
+
+<!-- Navigation -->
+<div class="nav">
+  <button onclick="prev()">&#8592;</button>
+  <button onclick="next()">&#8594;</button>
+</div>
+<div class="counter"><span id="current">1</span> / <span id="total"></span></div>
+
+<script>
+  const slides = document.querySelectorAll('.slide');
+  let idx = 0;
+  document.getElementById('total').textContent = slides.length;
+
+  function show(i) {
+    slides[idx].classList.remove('active');
+    idx = (i + slides.length) % slides.length;
+    slides[idx].classList.add('active');
+    document.getElementById('current').textContent = idx + 1;
+  }
+
+  function next() { show(idx + 1); }
+  function prev() { show(idx - 1); }
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); next(); }
+    if (e.key === 'ArrowLeft') prev();
+  });
+</script>
+</body>
+</html>
