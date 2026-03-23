@@ -13,7 +13,7 @@ import { usePlacementStore } from './stores/placement-store';
 import { usePresetsStore } from './stores/presets-store';
 import { useUIStore } from './stores/ui-store';
 import { PANEL_CSS } from './styles/panel';
-import { createBuildingPolygon } from './utils/building-geometry';
+import { createBuildingPolygon, createRotatedBuildingPolygon } from './utils/building-geometry';
 import { validatePlacement } from './validation/check-placement';
 
 import type { Preset } from './lib/schemas';
@@ -210,6 +210,7 @@ function subscribeToPresetChanges(): void {
         usePlacementStore.getState().startPlacing();
         document.dispatchEvent(new CustomEvent('innomapcad:start-placing'));
       } else {
+        removeGhostLayer();
         usePlacementStore.getState().stopPlacing();
         document.dispatchEvent(new CustomEvent('innomapcad:stop-placing'));
       }
@@ -246,6 +247,43 @@ const BUILDING_COLOR_VALID: readonly [number, number, number, number] = [82, 196
 
 /** Color for invalid building placement. */
 const BUILDING_COLOR_INVALID: readonly [number, number, number, number] = [255, 77, 79, 200] as const;
+
+/** Opacity for the ghost (preview) building. */
+const GHOST_OPACITY = 120;
+
+/**
+ * Updates the ghost preview layer at the given hover position.
+ * Shows a semi-transparent building outline following the cursor.
+ */
+function updateGhostLayer(lng: number, lat: number): void {
+  const { isPlacing } = usePlacementStore.getState();
+  if (!isPlacing) return;
+
+  const selectedSlug = useUIStore.getState().selectedPreset;
+  if (selectedSlug === null) return;
+
+  const preset = findPreset(selectedSlug);
+  if (preset === undefined) return;
+
+  const rotationDeg = usePlacementStore.getState().rotationDeg;
+  const polygon = createRotatedBuildingPolygon([lng, lat], preset.width_m, preset.length_m, rotationDeg);
+  const color = hexToRgba(preset.color, GHOST_OPACITY);
+
+  const deckStore = useDeckStore.getState();
+  deckStore.removeLayer(LAYER_IDS.ghostBuilding);
+
+  const layerConfig = createSolidPolygonLayerConfig(
+    LAYER_IDS.ghostBuilding,
+    polygon.coordinates[0],
+    { color, height: preset.height_m },
+  );
+  deckStore.addLayer(layerConfig);
+}
+
+/** Removes the ghost preview layer from the map. */
+function removeGhostLayer(): void {
+  useDeckStore.getState().removeLayer(LAYER_IDS.ghostBuilding);
+}
 
 /**
  * Runs client-side validation on a placed building and updates stores + layer color.
@@ -301,9 +339,11 @@ function listenForMapClick(): void {
       return;
     }
 
-    const polygon = createBuildingPolygon([lng, lat], preset.width_m, preset.length_m);
+    const rotationDeg = usePlacementStore.getState().rotationDeg;
+    const polygon = createRotatedBuildingPolygon([lng, lat], preset.width_m, preset.length_m, rotationDeg);
     const color = hexToRgba(preset.color, 200);
 
+    removeGhostLayer();
     usePlacementStore.getState().placeBuilding({
       center: [lng, lat],
       presetSlug: selectedSlug,
@@ -325,6 +365,7 @@ function listenForMapHover(): void {
   document.addEventListener('innomapcad:map-hover', ((event: CustomEvent<MapCoordDetail>) => {
     const { lng, lat } = event.detail;
     usePlacementStore.getState().setHoverPosition([lng, lat]);
+    updateGhostLayer(lng, lat);
   }) as EventListener);
 }
 

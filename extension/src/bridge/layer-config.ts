@@ -56,6 +56,7 @@ export const LAYER_IDS = {
   cadastral: 'cadastral-layer',
   protectionZones: 'protection-zones-layer',
   placedBuilding: 'placed-building-layer',
+  ghostBuilding: 'ghost-building-layer',
 } as const;
 
 interface SolidPolygonLayerOptions {
