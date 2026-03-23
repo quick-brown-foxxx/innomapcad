@@ -1,0 +1,10 @@
+# OS
+.DS_Store
+
+# Test results
+test-results/
+
+# Ralph working files
+ralph/current/*
+!ralph/current/.gitkeep
+ralph/archive/
