@@ -184,7 +184,7 @@ function instantiateLayer(config: LayerConfig): unknown {
   return null;
 }
 
-// ---- Direct injection + heartbeat ----
+// ---- Direct injection + setProps intercept ----
 
 let deckRef: DeckLike | null = null;
 let customLayers: readonly LayerConfig[] = [];
@@ -196,50 +196,76 @@ let cachedInstances: readonly unknown[] = [];
  */
 const allKnownIds: Set<string> = new Set();
 
+/** Guard flag to prevent recursion when our interceptor calls the original setProps. */
+let insideIntercept = false;
+
+/** Reference to the original (unwrapped) deck.setProps — set once during patchSetProps. */
+let originalSetProps: ((props: Record<string, unknown>) => void) | null = null;
+
 /**
- * Syncs the deck.gl instance with our current custom layers.
- * Removes ALL known custom layer IDs from deck, then appends current ones.
- * Works correctly even when cachedInstances is empty (all layers toggled off).
+ * Filters out all known custom layer IDs from an array of layers.
+ */
+function stripCustomLayers(layers: readonly unknown[]): unknown[] {
+  return layers.filter(
+    (l) => !(l !== null && typeof l === 'object' && 'id' in l && allKnownIds.has((l as LayerConfig).id)),
+  );
+}
+
+/**
+ * Merges our cached layer instances into a layers array.
+ * Strips out any existing custom IDs first to prevent duplicates.
+ */
+function mergeLayers(incomingLayers: readonly unknown[]): unknown[] {
+  const base = stripCustomLayers(incomingLayers);
+  return cachedInstances.length > 0 ? [...base, ...cachedInstances] : base;
+}
+
+/**
+ * Patches deck.setProps ONCE to intercept every call and merge our custom layers.
+ * Uses a guard flag (insideIntercept) to prevent recursion — no stacking, no infinite loops.
+ */
+function patchSetProps(deck: DeckLike): void {
+  // Already patched — don't stack wrappers
+  if (originalSetProps !== null) return;
+
+  originalSetProps = deck.setProps.bind(deck);
+
+  deck.setProps = (props: Record<string, unknown>): void => {
+    if (insideIntercept || originalSetProps === null) {
+      // Re-entrant call from our own code — pass through without merging
+      originalSetProps?.(props);
+      return;
+    }
+
+    insideIntercept = true;
+
+    if ('layers' in props && Array.isArray(props.layers)) {
+      // React is setting layers — merge ours in
+      const merged = mergeLayers(props.layers as unknown[]);
+      originalSetProps({ ...props, layers: merged });
+    } else {
+      // Non-layer update (viewState, etc.) — pass through
+      originalSetProps(props);
+    }
+
+    insideIntercept = false;
+  };
+}
+
+/**
+ * Forces a sync of our custom layers into the deck instance.
+ * Used after layer configs change (toggle on/off) or after re-acquiring deck ref.
  */
 function syncLayers(): void {
   if (deckRef === null) return;
 
   const rawLayers: unknown = deckRef.props?.layers;
   const currentLayers: readonly unknown[] = Array.isArray(rawLayers) ? (rawLayers as unknown[]) : [];
+  const merged = mergeLayers(currentLayers);
 
-  // Filter out ALL known custom IDs — not just current ones
-  const baseLayers = currentLayers.filter(
-    (l) => !(l !== null && typeof l === 'object' && 'id' in l && allKnownIds.has((l as LayerConfig).id)),
-  );
-
-  if (cachedInstances.length === 0) {
-    // All custom layers toggled off — just set base layers (cleanup)
-    deckRef.setProps({ layers: [...baseLayers] });
-  } else {
-    deckRef.setProps({ layers: [...baseLayers, ...cachedInstances] });
-  }
-}
-
-// Heartbeat: re-sync if React wiped our layers
-const HEARTBEAT_MS = 500;
-let heartbeatId: ReturnType<typeof setInterval> | null = null;
-
-function startHeartbeat(): void {
-  if (heartbeatId !== null) return;
-  heartbeatId = setInterval(() => {
-    if (deckRef === null || cachedInstances.length === 0) return;
-
-    const rawLayers: unknown = deckRef.props?.layers;
-    const currentLayers: readonly unknown[] = Array.isArray(rawLayers) ? (rawLayers as unknown[]) : [];
-    const activeIds = new Set(customLayers.map((l) => l.id));
-    const hasOurLayers = currentLayers.some(
-      (l) => l !== null && typeof l === 'object' && 'id' in l && activeIds.has((l as LayerConfig).id),
-    );
-
-    if (!hasOurLayers) {
-      syncLayers();
-    }
-  }, HEARTBEAT_MS);
+  insideIntercept = true;
+  originalSetProps?.({ layers: merged });
+  insideIntercept = false;
 }
 
 // ---- Map click / hover handling for placement mode ----
@@ -383,7 +409,8 @@ function tryInit(): boolean {
   // Extract layer constructors from existing sublayers
   extractLayerClasses(deck);
 
-  startHeartbeat();
+  // Intercept setProps so every React update automatically includes our layers
+  patchSetProps(deck);
 
   document.dispatchEvent(
     new CustomEvent('innomapcad:deck-ready'),
@@ -441,7 +468,9 @@ function observeReRenders(): void {
     deckRef = deck;
     // Re-extract layer constructors from the new deck instance
     extractLayerClasses(deck);
-    // Re-inject cached layers into the new deck instance
+    // Re-patch setProps on the new deck instance and sync layers
+    originalSetProps = null; // Reset so patchSetProps applies to new instance
+    patchSetProps(deck);
     syncLayers();
   });
 
