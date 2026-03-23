@@ -68,18 +68,13 @@ fi
 # Helpers
 # ---------------------------------------------------------------------------
 
-# Extract branchName from prd.yaml using yq if available, else grep fallback.
+# Extract branchName from prd.yaml using local yq wrapper.
 get_branch_name() {
     if [[ ! -f "$PRD" ]]; then
         echo ""
         return
     fi
-
-    if command -v yq &>/dev/null; then
-        yq '.branchName // ""' "$PRD" 2>/dev/null
-    else
-        grep -Po '^\s*branchName:\s*\K\S+' "$PRD" 2>/dev/null || echo ""
-    fi
+    "$RALPH_DIR/yq.sh" '.branchName // ""' "$PRD" 2>/dev/null || echo ""
 }
 
 # Archive the current run into ralph/archive/YYYY-MM-DD-feature-name/
