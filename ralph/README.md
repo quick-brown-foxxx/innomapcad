@@ -4,7 +4,7 @@ Ralph is an autonomous AI agent loop that implements features story-by-story fro
 
 ## How It Works
 
-1. **Plan** — Create a PRD for your feature (use `/prd` skill or write manually)
+1. **Plan** — Create a PRD for your feature
 2. **Convert** — Convert PRD to ralph format: use `/convert-prd-to-ralph` skill → outputs `ralph/current/prd.yaml`
 3. **Customize prompt** — Copy `ralph/RALPH.md` → `ralph/current/RALPH.md`, edit project-specific section
 4. **Run** — `./ralph/ralph.sh [--tool amp|claude] [max_iterations]`
@@ -16,7 +16,7 @@ ralph/
 ├── ralph.sh              # Main orchestration loop
 ├── RALPH.md              # Prompt template (don't edit for runs)
 ├── README.md             # This file
-├── current/              # Current run state (gitignored)
+├── current/              # Current run state
 │   ├── RALPH.md          # Customized prompt for this run
 │   ├── prd.yaml          # Feature PRD in YAML
 │   └── progress.txt      # Append-only progress log

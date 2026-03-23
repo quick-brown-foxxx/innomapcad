@@ -5,6 +5,4 @@
 test-results/
 
 # Ralph working files
-ralph/current/*
-!ralph/current/.gitkeep
 ralph/archive/
