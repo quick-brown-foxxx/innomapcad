@@ -365,25 +365,38 @@ function observeReRenders(): void {
     return;
   }
 
+  let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+
   const observer = new MutationObserver(() => {
-    const canvas = document.querySelector('#deckgl-overlay');
-    if (canvas === null) {
+    // Debounce: deck.gl triggers many DOM mutations per frame.
+    // We only need to check for a new deck instance occasionally.
+    if (debounceTimer !== null) {
       return;
     }
 
-    const deck = findDeckInstance(canvas);
-    if (deck === null) {
-      return;
-    }
+    debounceTimer = setTimeout(() => {
+      debounceTimer = null;
 
-    // patchSetProps will skip if this is the same deck instance,
-    // or re-patch with a fresh original if it's a genuinely new instance
-    patchSetProps(deck);
+      const canvas = document.querySelector('#deckgl-overlay');
+      if (canvas === null) {
+        return;
+      }
+
+      const deck = findDeckInstance(canvas);
+      if (deck === null) {
+        return;
+      }
+
+      // patchSetProps will skip if this is the same deck instance,
+      // or re-patch with a fresh original if it's a genuinely new instance
+      patchSetProps(deck);
+    }, 500);
   });
 
+  // Only watch direct children — subtree fires on every WebGL canvas update
   observer.observe(wrapper, {
     childList: true,
-    subtree: true,
+    subtree: false,
   });
 }
 
