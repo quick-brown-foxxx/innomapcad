@@ -1,12 +1,6 @@
 ---
 name: convert-prd-to-ralph
-description: Convert a markdown PRD into ralph's prd.yaml format for autonomous execution
-triggers:
-  - "convert this prd"
-  - "turn this into ralph format"
-  - "create prd.yaml from this"
-  - "ralph yaml"
-  - "convert prd to ralph"
+description: Convert a markdown PRD into ralph's prd.yaml format for autonomous execution. triggers - "convert this prd", "turn this into ralph format", "create prd.yaml from this", "ralph yaml", "convert prd to ralph"
 ---
 
 # Convert PRD to Ralph Format
