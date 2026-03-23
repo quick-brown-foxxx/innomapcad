@@ -25,3 +25,26 @@ class Preset(msgspec.Struct, frozen=True):
     height_m: float
     setback_m: float
     color: str
+
+
+class ValidateRequest(msgspec.Struct):
+    """Request body for the validate endpoint."""
+
+    geometry: dict[str, object]
+    preset_slug: str
+
+
+class Conflict(msgspec.Struct):
+    """A single validation conflict."""
+
+    layer: str
+    type: str
+    description: str
+    overlap_area_m2: float | None
+
+
+class ValidateResponse(msgspec.Struct):
+    """Response model for the validate endpoint."""
+
+    valid: bool
+    conflicts: list[Conflict]
