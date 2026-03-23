@@ -106,6 +106,18 @@ export async function loadBackendData(): Promise<boolean> {
 }
 
 /**
+ * Re-fetches all GIS data from the backend and rebuilds layers.
+ * Unlike the initial load, this clears cached data first so layers
+ * are fully replaced. Returns true if at least one source loaded.
+ */
+export async function reloadBackendData(): Promise<boolean> {
+  cadastralData = null;
+  protectionZonesData = null;
+  useUIStore.getState().setBackendWarning(null);
+  return loadBackendData();
+}
+
+/**
  * Resets module-level state. Used in tests.
  */
 export function resetDataLoader(): void {

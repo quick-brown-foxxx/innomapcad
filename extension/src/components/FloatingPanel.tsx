@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 
+import { reloadBackendData } from '@/services/data-loader';
 import { useUIStore } from '@/stores/ui-store';
 import { THEME } from '@/styles/theme';
 
@@ -38,7 +39,7 @@ const infoStyle: React.CSSProperties = {
   lineHeight: '1.4',
 };
 
-const collapseButtonStyle: React.CSSProperties = {
+const headerButtonStyle: React.CSSProperties = {
   background: 'none',
   border: 'none',
   color: THEME.textSecondary,
@@ -48,6 +49,11 @@ const collapseButtonStyle: React.CSSProperties = {
   lineHeight: 1,
   display: 'flex',
   alignItems: 'center',
+};
+
+const reloadSpinStyle: React.CSSProperties = {
+  ...headerButtonStyle,
+  transition: 'transform 0.3s',
 };
 
 function clamp(value: number, min: number, max: number): number {
@@ -121,6 +127,14 @@ export function FloatingPanel(): React.JSX.Element {
     [position.left, position.top],
   );
 
+  const [isReloading, setIsReloading] = useState(false);
+
+  const handleReload = useCallback(async (): Promise<void> => {
+    setIsReloading(true);
+    await reloadBackendData();
+    setIsReloading(false);
+  }, []);
+
   const isDragging = dragRef.current !== null;
 
   const panelStyle: React.CSSProperties = {
@@ -144,7 +158,17 @@ export function FloatingPanel(): React.JSX.Element {
           <span className="innomap-badge">{'beta'}</span>
           <button
             type="button"
-            style={collapseButtonStyle}
+            style={isReloading ? { ...reloadSpinStyle, transform: 'rotate(360deg)' } : reloadSpinStyle}
+            onClick={() => void handleReload()}
+            disabled={isReloading}
+            aria-label={'\u041f\u0435\u0440\u0435\u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044c \u0434\u0430\u043d\u043d\u044b\u0435'}
+            title={'\u041f\u0435\u0440\u0435\u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044c \u0441\u043b\u043e\u0438 \u0441 \u0441\u0435\u0440\u0432\u0435\u0440\u0430'}
+          >
+            {'\u21BB'}
+          </button>
+          <button
+            type="button"
+            style={headerButtonStyle}
             onClick={togglePanel}
             aria-label={panelCollapsed ? '\u0420\u0430\u0437\u0432\u0435\u0440\u043d\u0443\u0442\u044c \u043f\u0430\u043d\u0435\u043b\u044c' : '\u0421\u0432\u0435\u0440\u043d\u0443\u0442\u044c \u043f\u0430\u043d\u0435\u043b\u044c'}
           >

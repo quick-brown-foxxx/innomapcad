@@ -1,16 +1,17 @@
 # /// script
 # requires-python = ">=3.12"
 # ///
-"""Interactive GeoJSON rotation tuner.
+"""Interactive GeoJSON rotation + offset tuner.
 
-Reads ORIGINAL (unrotated) data from git, applies a rotation angle,
+Reads ORIGINAL (unrotated) data from git, applies rotation and XY offset,
 writes to backend/data/, and restarts the backend so you can see
-changes in the browser immediately.
+changes in the browser immediately. Hit the reload button in the extension.
 
 Usage:
-    uv run backend/scripts/tune_rotation.py              # interactive mode
-    uv run backend/scripts/tune_rotation.py 42.4          # one-shot with angle
-    uv run backend/scripts/tune_rotation.py --reset        # restore original unrotated data
+    uv run backend/scripts/tune_rotation.py                    # interactive mode
+    uv run backend/scripts/tune_rotation.py 42.4               # one-shot rotation
+    uv run backend/scripts/tune_rotation.py 42.4 100 -50       # rotation + offset (x=100m east, y=50m south)
+    uv run backend/scripts/tune_rotation.py --reset             # restore original unrotated data
 """
 
 from __future__ import annotations
@@ -84,10 +85,28 @@ def rotate_polygon(
     ]
 
 
-def rotate_geojson(data: GeoJSON, angle_deg: float) -> GeoJSON:
-    """Rotate all polygons in a GeoJSON FeatureCollection."""
+def offset_coord(coord: Coord, dx_deg: float, dy_deg: float) -> Coord:
+    """Shift a coordinate by dx/dy in degrees."""
+    return [coord[0] + dx_deg, coord[1] + dy_deg]
+
+
+def offset_ring(ring: Ring, dx_deg: float, dy_deg: float) -> Ring:
+    return [offset_coord(p, dx_deg, dy_deg) for p in ring]
+
+
+def transform_geojson(
+    data: GeoJSON,
+    angle_deg: float,
+    offset_x_m: float,
+    offset_y_m: float,
+) -> GeoJSON:
+    """Rotate and offset all polygons in a GeoJSON FeatureCollection."""
     theta = math.radians(-angle_deg)  # negative = clockwise
     cos_t, sin_t = math.cos(theta), math.sin(theta)
+
+    # Convert meter offsets to degrees
+    dx_deg = offset_x_m / METERS_PER_DEG_LNG
+    dy_deg = offset_y_m / METERS_PER_DEG_LAT
 
     features = data.get("features")
     if not isinstance(features, list):
@@ -105,13 +124,19 @@ def rotate_geojson(data: GeoJSON, angle_deg: float) -> GeoJSON:
             continue
 
         if geom.get("type") == "Polygon":
-            geom["coordinates"] = rotate_polygon(coords, cos_t, sin_t)
-        elif geom.get("type") == "MultiPolygon":
+            rotated = rotate_polygon(coords, cos_t, sin_t)
             geom["coordinates"] = [
-                rotate_polygon(poly, cos_t, sin_t)
-                for poly in coords
-                if isinstance(poly, list)
+                offset_ring(ring, dx_deg, dy_deg) for ring in rotated
             ]
+        elif geom.get("type") == "MultiPolygon":
+            new_polys = []
+            for poly in coords:
+                if isinstance(poly, list):
+                    rotated = rotate_polygon(poly, cos_t, sin_t)
+                    new_polys.append(
+                        [offset_ring(ring, dx_deg, dy_deg) for ring in rotated]
+                    )
+            geom["coordinates"] = new_polys
 
     return data
 
@@ -126,15 +151,17 @@ def write_geojson(filename: str, data: GeoJSON) -> None:
         f.write("\n")
 
 
-def apply_angle(angle_deg: float) -> None:
-    """Read originals from git, rotate, write to disk."""
+def apply_transform(
+    angle_deg: float, offset_x_m: float = 0.0, offset_y_m: float = 0.0
+) -> None:
+    """Read originals from git, rotate + offset, write to disk."""
     for filename in FILES:
         original = read_original(filename)
-        if angle_deg == 0.0:
+        if angle_deg == 0.0 and offset_x_m == 0.0 and offset_y_m == 0.0:
             write_geojson(filename, original)
         else:
-            rotated = rotate_geojson(original, angle_deg)
-            write_geojson(filename, rotated)
+            transformed = transform_geojson(original, angle_deg, offset_x_m, offset_y_m)
+            write_geojson(filename, transformed)
 
     n_cad = len(read_original(FILES[0]).get("features", []))  # type: ignore[arg-type]
     n_pz = len(read_original(FILES[1]).get("features", []))  # type: ignore[arg-type]
@@ -144,40 +171,50 @@ def apply_angle(angle_deg: float) -> None:
 
 def restart_backend() -> None:
     """Kill and restart the FastAPI backend so it reloads data."""
-    # Kill existing uvicorn
     subprocess.run(
         ["pkill", "-f", "uvicorn.*main:app"],
         capture_output=True,
         cwd=ROOT,
     )
-    # Start fresh in background
     subprocess.Popen(
         ["uv", "run", "uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"],
         cwd=ROOT / "backend",
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
-    print("  Backend restarted on :8000 (reload the extension page)")
+    print("  Backend restarted on :8000 (hit reload in extension panel)")
 
 
 # -- Main --------------------------------------------------------------------
 
 
+def parse_transform(raw: str) -> tuple[float, float, float]:
+    """Parse 'angle' or 'angle x y' from a single input string."""
+    parts = raw.split()
+    angle = float(parts[0])
+    x = float(parts[1]) if len(parts) > 1 else 0.0
+    y = float(parts[2]) if len(parts) > 2 else 0.0
+    return angle, x, y
+
+
 def interactive_loop() -> None:
     print("=" * 60)
-    print("  GeoJSON Rotation Tuner")
+    print("  GeoJSON Rotation + Offset Tuner")
     print("  Innopolis grid is ~42-47 deg CW from north")
     print("=" * 60)
     print()
     print("Commands:")
-    print("  <number>   - apply rotation (e.g. 42.4)")
-    print("  r          - restart backend (after applying)")
-    print("  q          - quit")
+    print("  <angle>              - rotate only (e.g. 42.4)")
+    print("  <angle> <x_m> <y_m>  - rotate + offset in meters")
+    print("                         x = east(+)/west(-)")
+    print("                         y = north(+)/south(-)")
+    print("  r                    - restart backend only")
+    print("  q                    - quit")
     print()
 
     while True:
         try:
-            raw = input("angle> ").strip()
+            raw = input("tune> ").strip()
         except (EOFError, KeyboardInterrupt):
             print()
             break
@@ -190,13 +227,16 @@ def interactive_loop() -> None:
             continue
 
         try:
-            angle = float(raw)
-        except ValueError:
+            angle, x, y = parse_transform(raw)
+        except (ValueError, IndexError):
             print(f"  Invalid input: {raw!r}")
             continue
 
-        print(f"  Rotating {angle}° clockwise...")
-        apply_angle(angle)
+        label = f"{angle}° CW"
+        if x != 0.0 or y != 0.0:
+            label += f" + offset ({x:+.0f}m E, {y:+.0f}m N)"
+        print(f"  Applying: {label}")
+        apply_transform(angle, x, y)
         restart_backend()
         print()
 
@@ -210,18 +250,23 @@ def main() -> None:
 
     if args[0] == "--reset":
         print("Restoring original (unrotated) data...")
-        apply_angle(0.0)
+        apply_transform(0.0)
         restart_backend()
         return
 
     try:
         angle = float(args[0])
+        x = float(args[1]) if len(args) > 1 else 0.0
+        y = float(args[2]) if len(args) > 2 else 0.0
     except ValueError:
-        print(f"Usage: {sys.argv[0]} [angle_degrees | --reset]")
+        print(f"Usage: {sys.argv[0]} [angle [x_meters y_meters] | --reset]")
         sys.exit(1)
 
-    print(f"Rotating {angle}° clockwise...")
-    apply_angle(angle)
+    label = f"{angle}° CW"
+    if x != 0.0 or y != 0.0:
+        label += f" + offset ({x:+.0f}m E, {y:+.0f}m N)"
+    print(f"Applying: {label}")
+    apply_transform(angle, x, y)
     restart_backend()
 
 

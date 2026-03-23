@@ -271,7 +271,7 @@ function syncLayers(): void {
 // ---- Map click / hover handling for placement mode ----
 
 let placingActive = false;
-let deckCanvas: HTMLCanvasElement | null = null;
+let clickTarget: HTMLElement | null = null;
 
 interface MapCoordEvent {
   readonly lng: number;
@@ -342,34 +342,36 @@ function handleMapHover(event: MouseEvent): void {
 function enablePlacementListeners(): void {
   placingActive = true;
 
-  const canvas = document.querySelector('#deckgl-overlay');
-  if (!(canvas instanceof HTMLCanvasElement)) {
+  // deck.gl places #view-default-view on top of the canvas, intercepting all pointer events.
+  // Attach listeners to that element first, falling back to the canvas itself.
+  const target = document.querySelector('#view-default-view') ?? document.querySelector('#deckgl-overlay');
+  if (!(target instanceof HTMLElement)) {
     return;
   }
 
-  // If the cached canvas is still the same DOM node and still connected, reuse it
-  if (deckCanvas === canvas && deckCanvas.isConnected) {
-    deckCanvas.style.cursor = 'crosshair';
+  // If the cached target is still the same DOM node and still connected, reuse it
+  if (clickTarget === target && clickTarget.isConnected) {
+    clickTarget.style.cursor = 'crosshair';
     return;
   }
 
-  // Canvas was replaced by React re-render — detach old listeners if any
-  if (deckCanvas !== null) {
-    deckCanvas.removeEventListener('click', handleMapClick);
-    deckCanvas.removeEventListener('mousemove', handleMapHover);
-    deckCanvas.style.cursor = '';
+  // Target was replaced by React re-render — detach old listeners if any
+  if (clickTarget !== null) {
+    clickTarget.removeEventListener('click', handleMapClick);
+    clickTarget.removeEventListener('mousemove', handleMapHover);
+    clickTarget.style.cursor = '';
   }
 
-  deckCanvas = canvas;
-  deckCanvas.addEventListener('click', handleMapClick);
-  deckCanvas.addEventListener('mousemove', handleMapHover);
-  deckCanvas.style.cursor = 'crosshair';
+  clickTarget = target;
+  clickTarget.addEventListener('click', handleMapClick);
+  clickTarget.addEventListener('mousemove', handleMapHover);
+  clickTarget.style.cursor = 'crosshair';
 }
 
 function disablePlacementListeners(): void {
   placingActive = false;
-  if (deckCanvas !== null) {
-    deckCanvas.style.cursor = '';
+  if (clickTarget !== null) {
+    clickTarget.style.cursor = '';
     // Keep listeners attached but inactive via placingActive flag
   }
 }
