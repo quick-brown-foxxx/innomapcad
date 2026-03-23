@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useUIStore } from '@/stores/ui-store';
 import { THEME } from '@/styles/theme';
@@ -7,6 +7,16 @@ import { ActionButtons } from './ActionButtons';
 import { LayerToggles } from './LayerToggles';
 import { PresetPalette } from './PresetPalette';
 import { ValidationStatus } from './ValidationStatus';
+
+const PANEL_WIDTH = 320;
+const PANEL_MARGIN = 16;
+
+interface DragState {
+  readonly startX: number;
+  readonly startY: number;
+  readonly startLeft: number;
+  readonly startTop: number;
+}
 
 const warningStyle: React.CSSProperties = {
   padding: '8px 10px',
@@ -40,6 +50,10 @@ const collapseButtonStyle: React.CSSProperties = {
   alignItems: 'center',
 };
 
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max);
+}
+
 /** Main floating panel component rendered inside the shadow DOM. */
 export function FloatingPanel(): React.JSX.Element {
   const backendWarning = useUIStore((s) => s.backendWarning);
@@ -47,9 +61,84 @@ export function FloatingPanel(): React.JSX.Element {
   const togglePanel = useUIStore((s) => s.togglePanel);
   const deckGlFound = useUIStore((s) => s.deckGlFound);
 
+  const [position, setPosition] = useState({
+    top: PANEL_MARGIN,
+    left: window.innerWidth - PANEL_WIDTH - PANEL_MARGIN,
+  });
+
+  const dragRef = useRef<DragState | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+    const drag = dragRef.current;
+    if (drag === null) return;
+
+    const panelEl = panelRef.current;
+    const panelHeight = panelEl?.offsetHeight ?? 0;
+
+    const newLeft = clamp(
+      drag.startLeft + (e.clientX - drag.startX),
+      0,
+      window.innerWidth - PANEL_WIDTH,
+    );
+    const newTop = clamp(
+      drag.startTop + (e.clientY - drag.startY),
+      0,
+      window.innerHeight - panelHeight,
+    );
+
+    setPosition({ top: newTop, left: newLeft });
+  }, []);
+
+  const handleMouseUp = useCallback(() => {
+    dragRef.current = null;
+  }, []);
+
+  useEffect(() => {
+    // Attach to document so tracking works when mouse leaves the shadow DOM
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [handleMouseMove, handleMouseUp]);
+
+  const handleHeaderMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      // Don't start drag if clicking on a button (collapse button)
+      if (e.target instanceof HTMLElement && e.target.closest('button') !== null) {
+        return;
+      }
+      e.preventDefault();
+      dragRef.current = {
+        startX: e.clientX,
+        startY: e.clientY,
+        startLeft: position.left,
+        startTop: position.top,
+      };
+    },
+    [position.left, position.top],
+  );
+
+  const isDragging = dragRef.current !== null;
+
+  const panelStyle: React.CSSProperties = {
+    top: `${String(position.top)}px`,
+    left: `${String(position.left)}px`,
+  };
+
   return (
-    <div data-testid="innomap-panel" className="innomap-panel">
-      <div className="innomap-header">
+    <div
+      ref={panelRef}
+      data-testid="innomap-panel"
+      className="innomap-panel"
+      style={panelStyle}
+    >
+      <div
+        className={`innomap-header${isDragging ? ' dragging' : ''}`}
+        onMouseDown={handleHeaderMouseDown}
+      >
         <h3>{'\u0413\u0418\u0421-\u0421\u0410\u041f\u0420 \u0418\u043d\u043d\u043e\u043f\u043e\u043b\u0438\u0441'}</h3>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span className="innomap-badge">{'beta'}</span>

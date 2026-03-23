@@ -19,7 +19,7 @@ export const PANEL_CSS = `
   .innomap-panel {
     position: fixed;
     top: 16px;
-    right: 16px;
+    left: calc(100vw - 320px - 16px);
     width: 320px;
     max-height: calc(100vh - 32px);
     overflow-y: auto;
@@ -41,6 +41,12 @@ export const PANEL_CSS = `
     display: flex;
     align-items: center;
     justify-content: space-between;
+    cursor: grab;
+    user-select: none;
+  }
+
+  .innomap-header.dragging {
+    cursor: grabbing;
   }
 
   .innomap-panel:not(:has(.innomap-section)) .innomap-header {
