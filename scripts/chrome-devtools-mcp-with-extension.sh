@@ -2,8 +2,18 @@
 # Launch Chrome DevTools MCP with InnoMapCAD extension loaded
 set -euo pipefail
 
-EXTENSION_DIR="${EXTENSION_DIR:-$(dirname "$0")/../extension/dist}"
-EXTENSION_DIR="$(cd "$EXTENSION_DIR" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 
-exec npx @anthropic-ai/chrome-devtools-mcp@latest \
-  --chrome-args="--disable-extensions-except=${EXTENSION_DIR},--load-extension=${EXTENSION_DIR}"
+EXTENSION_DIR="${PROJECT_DIR}/extension/dist"
+CHROME_EXECUTABLE="${CHROME_EXECUTABLE:-/home/lord/.cache/puppeteer-browsers/chrome/linux-146.0.7680.153/chrome-linux64/chrome}"
+
+exec npx chrome-devtools-mcp@latest \
+  --executablePath="${CHROME_EXECUTABLE}" \
+  --userDataDir="/home/lord/.cache/chrome-devtools-mcp/chrome-profile-extension" \
+  --ignoreDefaultChromeArg="--disable-extensions" \
+  --chromeArg="--headless=new" \
+  --chromeArg="--no-sandbox" \
+  --chromeArg="--disable-dev-shm-usage" \
+  --chromeArg="--disable-extensions-except=${EXTENSION_DIR}" \
+  --chromeArg="--load-extension=${EXTENSION_DIR}"

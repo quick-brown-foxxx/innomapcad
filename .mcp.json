@@ -4,7 +4,7 @@
       "command": "bash",
       "args": ["scripts/chrome-devtools-mcp-with-extension.sh"],
       "env": {
-        "EXTENSION_DIR": ""
+        "EXTENSION_DIR": "extension/dist"
       }
     }
   }
