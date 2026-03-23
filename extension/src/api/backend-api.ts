@@ -15,7 +15,7 @@ interface PolygonGeometry {
   readonly coordinates: readonly (readonly (readonly [number, number])[])[];
 }
 
-const BASE_URL = 'http://localhost:8000';
+const BASE_URL = 'http://localhost:8000/api/v1';
 
 /** Fetch all building presets from the backend. */
 export async function getPresets(): Promise<Result<Preset[], ApiError>> {
