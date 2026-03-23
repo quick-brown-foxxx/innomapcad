@@ -14,6 +14,7 @@ from src.services.data_store import data_store
 
 _ALLOWED_ORIGINS: list[str] = [
     "https://4dinno.ru",
+    "https://www.4dinno.ru",
 ]
 
 

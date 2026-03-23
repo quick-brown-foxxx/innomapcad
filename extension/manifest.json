@@ -5,14 +5,14 @@
   "description": "GIS-SAPR overlay for 4dinno.ru digital twin",
   "content_scripts": [
     {
-      "matches": ["https://4dinno.ru/map/*"],
+      "matches": ["https://4dinno.ru/map/*", "https://www.4dinno.ru/map/*"],
       "js": ["content.js"]
     }
   ],
   "web_accessible_resources": [
     {
       "resources": ["injected.js"],
-      "matches": ["https://4dinno.ru/*"]
+      "matches": ["https://4dinno.ru/*", "https://www.4dinno.ru/*"]
     }
   ]
 }
