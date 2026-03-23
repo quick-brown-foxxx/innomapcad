@@ -191,25 +191,36 @@ let customLayers: readonly LayerConfig[] = [];
 let cachedInstances: readonly unknown[] = [];
 
 /**
- * Injects cached custom layer instances into the deck.gl instance.
- * Filters out any existing layers with the same IDs first, then appends ours.
+ * Tracks ALL layer IDs we have ever injected, so we can remove them
+ * even after they are toggled off (no longer in customLayers).
  */
-function injectCustomLayers(): void {
-  if (deckRef === null || cachedInstances.length === 0) return;
+const allKnownIds: Set<string> = new Set();
+
+/**
+ * Syncs the deck.gl instance with our current custom layers.
+ * Removes ALL known custom layer IDs from deck, then appends current ones.
+ * Works correctly even when cachedInstances is empty (all layers toggled off).
+ */
+function syncLayers(): void {
+  if (deckRef === null) return;
 
   const rawLayers: unknown = deckRef.props?.layers;
   const currentLayers: readonly unknown[] = Array.isArray(rawLayers) ? (rawLayers as unknown[]) : [];
 
-  // Filter out our layers from current (by id), then append ours
-  const customIds = new Set(customLayers.map((l) => l.id));
+  // Filter out ALL known custom IDs — not just current ones
   const baseLayers = currentLayers.filter(
-    (l) => !(l !== null && typeof l === 'object' && 'id' in l && customIds.has((l as LayerConfig).id)),
+    (l) => !(l !== null && typeof l === 'object' && 'id' in l && allKnownIds.has((l as LayerConfig).id)),
   );
 
-  deckRef.setProps({ layers: [...baseLayers, ...cachedInstances] });
+  if (cachedInstances.length === 0) {
+    // All custom layers toggled off — just set base layers (cleanup)
+    deckRef.setProps({ layers: [...baseLayers] });
+  } else {
+    deckRef.setProps({ layers: [...baseLayers, ...cachedInstances] });
+  }
 }
 
-// Heartbeat: re-inject if React wiped our layers
+// Heartbeat: re-sync if React wiped our layers
 const HEARTBEAT_MS = 500;
 let heartbeatId: ReturnType<typeof setInterval> | null = null;
 
@@ -219,14 +230,14 @@ function startHeartbeat(): void {
     if (deckRef === null || cachedInstances.length === 0) return;
 
     const rawLayers: unknown = deckRef.props?.layers;
-  const currentLayers: readonly unknown[] = Array.isArray(rawLayers) ? (rawLayers as unknown[]) : [];
-    const customIds = new Set(customLayers.map((l) => l.id));
+    const currentLayers: readonly unknown[] = Array.isArray(rawLayers) ? (rawLayers as unknown[]) : [];
+    const activeIds = new Set(customLayers.map((l) => l.id));
     const hasOurLayers = currentLayers.some(
-      (l) => l !== null && typeof l === 'object' && 'id' in l && customIds.has((l as LayerConfig).id),
+      (l) => l !== null && typeof l === 'object' && 'id' in l && activeIds.has((l as LayerConfig).id),
     );
 
     if (!hasOurLayers) {
-      injectCustomLayers();
+      syncLayers();
     }
   }, HEARTBEAT_MS);
 }
@@ -342,9 +353,13 @@ document.addEventListener('innomapcad:stop-placing', () => {
 
 document.addEventListener('innomapcad:update-layers', ((event: CustomEvent<readonly LayerConfig[]>) => {
   customLayers = event.detail;
+  // Track all IDs we've ever seen so we can remove them even after toggle-off
+  for (const layer of customLayers) {
+    allKnownIds.add(layer.id);
+  }
   // Instantiate ONCE, cache for reuse. Filter nulls (unknown types or missing constructor).
   cachedInstances = customLayers.map((layer) => instantiateLayer(layer)).filter(Boolean);
-  injectCustomLayers();
+  syncLayers();
 }) as EventListener);
 
 // ---- Initialization ----
@@ -427,7 +442,7 @@ function observeReRenders(): void {
     // Re-extract layer constructors from the new deck instance
     extractLayerClasses(deck);
     // Re-inject cached layers into the new deck instance
-    injectCustomLayers();
+    syncLayers();
   });
 
   // Only watch direct children of wrapper — NOT subtree
