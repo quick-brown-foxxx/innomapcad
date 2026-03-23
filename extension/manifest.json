@@ -8,5 +8,11 @@
       "matches": ["https://4dinno.ru/map/*"],
       "js": ["content.js"]
     }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["injected.js"],
+      "matches": ["https://4dinno.ru/*"]
+    }
   ]
 }

@@ -2,7 +2,10 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 
 import { FloatingPanel } from './components/FloatingPanel';
+import { useDeckStore } from './stores/deck-store';
 import { PANEL_CSS } from './styles/panel';
+
+import type { LayerConfig } from './bridge/deck-types';
 
 /** Maximum time (ms) to wait for the deck.gl overlay element. */
 const DECKGL_TIMEOUT_MS = 15_000;
@@ -67,6 +70,46 @@ function waitForElement(selector: string, timeoutMs: number): Promise<Element> {
 }
 
 /**
+ * Injects the page-context script that runs in the page's JS world.
+ * This is necessary because the content script runs in an isolated world
+ * and cannot access the page's React fiber tree or deck.gl instance.
+ */
+function injectPageScript(): void {
+  const script = document.createElement('script');
+  script.src = chrome.runtime.getURL('injected.js');
+  script.onload = (): void => {
+    script.remove();
+  };
+  document.head.appendChild(script);
+}
+
+/**
+ * Listens for the deck-ready event from the injected page script
+ * and updates the Zustand store.
+ */
+function listenForDeckReady(): void {
+  document.addEventListener('innomapcad:deck-ready', () => {
+    useDeckStore.getState().setDeckReady(true);
+  });
+}
+
+/**
+ * Dispatches custom layer updates to the injected page script
+ * whenever the Zustand store changes.
+ */
+function subscribeToLayerUpdates(): void {
+  useDeckStore.subscribe((state, prevState) => {
+    if (state.customLayers !== prevState.customLayers) {
+      document.dispatchEvent(
+        new CustomEvent<readonly LayerConfig[]>('innomapcad:update-layers', {
+          detail: state.customLayers,
+        }),
+      );
+    }
+  });
+}
+
+/**
  * Creates the shadow DOM host, injects styles, and mounts the React panel.
  */
 function mountPanel(): void {
@@ -98,11 +141,20 @@ function mountPanel(): void {
 }
 
 /**
- * Entry point: waits for deck.gl overlay, then mounts the extension panel.
+ * Entry point: waits for deck.gl overlay, injects bridge, then mounts the extension panel.
  */
 async function init(): Promise<void> {
   try {
     await waitForElement('#deckgl-overlay', DECKGL_TIMEOUT_MS);
+
+    // Set up bridge communication before injecting
+    listenForDeckReady();
+    subscribeToLayerUpdates();
+
+    // Inject the page-context script for fiber walk + setProps patching
+    injectPageScript();
+
+    // Mount the UI panel
     mountPanel();
   } catch {
     // deck.gl overlay not found within timeout — do not mount
