@@ -105,4 +105,10 @@ export const PANEL_CSS = `
     font-size: 13px;
     color: ${COLORS.text};
   }
+
+  @keyframes innomap-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
 ` as const;
