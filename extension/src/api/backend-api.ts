@@ -12,7 +12,7 @@ import type { FeatureCollection, Preset, ValidateResponse } from '@/lib/schemas'
 /** Minimal GeoJSON Polygon shape accepted by the validate endpoint. */
 interface PolygonGeometry {
   readonly type: 'Polygon';
-  readonly coordinates: readonly (readonly [number, number])[][];
+  readonly coordinates: readonly (readonly (readonly [number, number])[])[];
 }
 
 const BASE_URL = 'http://localhost:8000';

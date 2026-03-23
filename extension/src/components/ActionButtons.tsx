@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useCallback, useState } from 'react';
 
+import { postValidate } from '@/api/backend-api';
 import { LAYER_IDS } from '@/bridge/layer-config';
 import { useDeckStore } from '@/stores/deck-store';
 import { usePlacementStore } from '@/stores/placement-store';
@@ -40,12 +41,48 @@ const removeButtonStyle = (disabled: boolean): React.CSSProperties => ({
 });
 
 export function ActionButtons(): React.JSX.Element {
-  const selectedPreset = useUIStore((s) => s.selectedPreset);
   const placedBuilding = usePlacementStore((s) => s.placedBuilding);
   const removeBuilding = usePlacementStore((s) => s.removeBuilding);
   const removeLayer = useDeckStore((s) => s.removeLayer);
-  const isValidateDisabled = selectedPreset === null;
+  const validationStatus = useUIStore((s) => s.validationStatus);
+  const setValidationStatus = useUIStore((s) => s.setValidationStatus);
+  const setValidationConflicts = useUIStore((s) => s.setValidationConflicts);
+  const setBackendWarning = useUIStore((s) => s.setBackendWarning);
+
+  const [isRequesting, setIsRequesting] = useState<boolean>(false);
+
+  const isValidateDisabled =
+    placedBuilding === null || isRequesting || validationStatus === 'checking';
   const isRemoveDisabled = placedBuilding === null;
+
+  const handleValidate = useCallback(async (): Promise<void> => {
+    const building = usePlacementStore.getState().placedBuilding;
+    if (building === null) {
+      return;
+    }
+
+    setIsRequesting(true);
+    setValidationStatus('checking');
+    setBackendWarning(null);
+
+    const result = await postValidate(building.polygon, building.presetSlug);
+
+    if (result.ok) {
+      setValidationConflicts(
+        result.value.conflicts.map((c) => ({
+          layer: c.layer,
+          type: c.type,
+          description: c.description,
+        })),
+      );
+      setValidationStatus(result.value.valid ? 'valid' : 'invalid');
+    } else {
+      setValidationStatus('idle');
+      setBackendWarning('Сервер недоступен');
+    }
+
+    setIsRequesting(false);
+  }, [setValidationStatus, setValidationConflicts, setBackendWarning]);
 
   function handleRemoveBuilding(): void {
     removeBuilding();
@@ -58,9 +95,10 @@ export function ActionButtons(): React.JSX.Element {
         type="button"
         style={validateButtonStyle(isValidateDisabled)}
         disabled={isValidateDisabled}
+        onClick={() => void handleValidate()}
         aria-label="Проверить размещение"
       >
-        {'Проверить'}
+        {isRequesting ? 'Проверка...' : 'Проверить'}
       </button>
       <button
         type="button"
