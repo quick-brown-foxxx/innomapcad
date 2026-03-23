@@ -2,7 +2,9 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 
 import { FloatingPanel } from './components/FloatingPanel';
+import { loadBackendData, subscribeToVisibilityChanges } from './services/data-loader';
 import { useDeckStore } from './stores/deck-store';
+import { useUIStore } from './stores/ui-store';
 import { PANEL_CSS } from './styles/panel';
 
 import type { LayerConfig } from './bridge/deck-types';
@@ -84,12 +86,21 @@ function injectPageScript(): void {
 }
 
 /**
- * Listens for the deck-ready event from the injected page script
- * and updates the Zustand store.
+ * Listens for the deck-ready event from the injected page script,
+ * updates the Zustand store, and triggers backend data loading.
  */
 function listenForDeckReady(): void {
   document.addEventListener('innomapcad:deck-ready', () => {
     useDeckStore.getState().setDeckReady(true);
+
+    // Load GIS data from backend once the bridge is ready
+    void loadBackendData().then((anySuccess) => {
+      if (!anySuccess) {
+        useUIStore.getState().setBackendWarning(
+          'Backend unavailable. Layers will not be displayed.',
+        );
+      }
+    });
   });
 }
 
@@ -150,6 +161,7 @@ async function init(): Promise<void> {
     // Set up bridge communication before injecting
     listenForDeckReady();
     subscribeToLayerUpdates();
+    subscribeToVisibilityChanges();
 
     // Inject the page-context script for fiber walk + setProps patching
     injectPageScript();

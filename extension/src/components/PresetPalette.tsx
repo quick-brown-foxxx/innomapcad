@@ -1,22 +1,18 @@
 import React from 'react';
 
+import { usePresetsStore } from '@/stores/presets-store';
 import { useUIStore } from '@/stores/ui-store';
 import { THEME } from '@/styles/theme';
 
-interface PresetData {
-  readonly slug: string;
-  readonly name: string;
-  readonly width: number;
-  readonly length: number;
-  readonly color: string;
-}
+import type { Preset } from '@/lib/schemas';
 
-const PRESETS: readonly PresetData[] = [
-  { slug: 'residential', name: 'Жилой дом', width: 24, length: 60, color: '#4A90D9' },
-  { slug: 'office', name: 'Офисное здание', width: 30, length: 50, color: '#50C878' },
-  { slug: 'transformer', name: 'ТП', width: 6, length: 4, color: '#FFD700' },
-  { slug: 'parking', name: 'Парковка', width: 40, length: 20, color: '#808080' },
-  { slug: 'warehouse', name: 'Склад', width: 50, length: 30, color: '#CD853F' },
+/** Hardcoded fallback presets used when backend is unavailable. */
+const FALLBACK_PRESETS: readonly Preset[] = [
+  { slug: 'residential', name: 'Жилой дом', width_m: 24, length_m: 60, floors: 9, height_m: 27, setback_m: 5, color: '#4A90D9' },
+  { slug: 'office', name: 'Офисное здание', width_m: 30, length_m: 50, floors: 5, height_m: 18, setback_m: 5, color: '#50C878' },
+  { slug: 'transformer', name: 'ТП', width_m: 6, length_m: 4, floors: 1, height_m: 3, setback_m: 2, color: '#FFD700' },
+  { slug: 'parking', name: 'Парковка', width_m: 40, length_m: 20, floors: 1, height_m: 3, setback_m: 3, color: '#808080' },
+  { slug: 'warehouse', name: 'Склад', width_m: 50, length_m: 30, floors: 1, height_m: 8, setback_m: 5, color: '#CD853F' },
 ];
 
 const gridStyle: React.CSSProperties = {
@@ -62,13 +58,28 @@ const cardDimStyle: React.CSSProperties = {
   color: THEME.textSecondary,
 };
 
+const loadingStyle: React.CSSProperties = {
+  fontSize: '12px',
+  color: THEME.textSecondary,
+  textAlign: 'center',
+  padding: '12px 0',
+};
+
 export function PresetPalette(): React.JSX.Element {
   const selectedPreset = useUIStore((s) => s.selectedPreset);
   const selectPreset = useUIStore((s) => s.selectPreset);
+  const storePresets = usePresetsStore((s) => s.presets);
+  const loading = usePresetsStore((s) => s.loading);
+
+  if (loading) {
+    return <div style={loadingStyle}>{'Loading presets...'}</div>;
+  }
+
+  const presets = storePresets.length > 0 ? storePresets : FALLBACK_PRESETS;
 
   return (
     <div style={gridStyle}>
-      {PRESETS.map((preset) => (
+      {presets.map((preset) => (
         <div
           key={preset.slug}
           style={cardStyle(selectedPreset === preset.slug)}
@@ -88,7 +99,7 @@ export function PresetPalette(): React.JSX.Element {
             <div style={swatchStyle(preset.color)} />
             <span style={cardNameStyle}>{preset.name}</span>
           </div>
-          <span style={cardDimStyle}>{`${String(preset.width)}×${String(preset.length)} м`}</span>
+          <span style={cardDimStyle}>{`${String(preset.width_m)}×${String(preset.length_m)} м`}</span>
         </div>
       ))}
     </div>

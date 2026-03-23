@@ -18,6 +18,7 @@ export interface UIState {
   readonly layerVisibility: LayerVisibility;
   readonly validationStatus: ValidationStatus;
   readonly validationConflicts: readonly ValidationConflict[];
+  readonly backendWarning: string | null;
 }
 
 export interface UIActions {
@@ -26,6 +27,7 @@ export interface UIActions {
   setValidationStatus: (status: ValidationStatus) => void;
   setValidationConflicts: (conflicts: readonly ValidationConflict[]) => void;
   resetValidation: () => void;
+  setBackendWarning: (warning: string | null) => void;
 }
 
 type UIStore = UIState & UIActions;
@@ -39,6 +41,7 @@ export const useUIStore = create<UIStore>(
     },
     validationStatus: 'idle',
     validationConflicts: [],
+    backendWarning: null,
 
     selectPreset: (preset: string | null): void => {
       set((state) => ({
@@ -68,6 +71,10 @@ export const useUIStore = create<UIStore>(
         validationStatus: 'idle',
         validationConflicts: [],
       });
+    },
+
+    setBackendWarning: (warning: string | null): void => {
+      set({ backendWarning: warning });
     },
   }),
 );

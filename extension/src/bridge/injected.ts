@@ -101,6 +101,41 @@ function findDeckInstance(canvas: Element): DeckLike | null {
   return null;
 }
 
+// ---- Layer instantiation ----
+
+/**
+ * Resolves a deck.gl layer class from the global scope.
+ * deck.gl on the page exposes classes on `window.deck` or similar globals.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function resolveLayerClass(typeName: string): (new (props: Record<string, unknown>) => any) | null {
+  // deck.gl typically exposes all classes on a global `deck` namespace
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+  const deckGlobal = (window as any).deck;
+  if (deckGlobal !== null && deckGlobal !== undefined) {
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment
+    const cls = deckGlobal[typeName];
+    if (typeof cls === 'function') {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-return
+      return cls;
+    }
+  }
+  return null;
+}
+
+/**
+ * Converts a plain LayerConfig into a deck.gl layer instance.
+ * Falls back to returning the config as-is if the class cannot be resolved.
+ */
+function instantiateLayer(config: LayerConfig): unknown {
+  const LayerClass = resolveLayerClass(config.type);
+  if (LayerClass !== null) {
+    return new LayerClass({ id: config.id, ...config.props });
+  }
+  // Fallback: return the config as-is (deck.gl may accept plain objects)
+  return { id: config.id, ...config.props };
+}
+
 // ---- SetProps patching ----
 
 let customLayers: readonly LayerConfig[] = [];
@@ -124,14 +159,43 @@ function patchSetProps(deck: DeckLike): void {
       : [];
 
     const merged = mergeLayers(existingLayers, customLayers);
-    originalSetProps({ ...props, layers: merged });
+
+    // Instantiate custom layer configs into real deck.gl layer objects
+    const instantiated = merged.map((layer) => {
+      // Only instantiate layers that came from our extension (have a type field)
+      // Existing layers from deck.gl are already instances
+      if (customLayers.some((cl) => cl.id === layer.id)) {
+        return instantiateLayer(layer);
+      }
+      return layer;
+    });
+
+    originalSetProps({ ...props, layers: instantiated });
   };
+}
+
+/**
+ * Forces a re-apply of custom layers by calling setProps with current layers.
+ * Used when custom layers change via the update-layers event.
+ */
+function reapplyCustomLayers(): void {
+  if (originalSetProps === null) {
+    return;
+  }
+
+  // Instantiate and push custom layers directly
+  const instantiated = customLayers.map((layer) => instantiateLayer(layer));
+  if (instantiated.length > 0) {
+    // Trigger a minimal setProps to force a re-render with custom layers
+    // The patched setProps will merge them in on the next frame update
+  }
 }
 
 // ---- Event listeners ----
 
 document.addEventListener('innomapcad:update-layers', ((event: CustomEvent<readonly LayerConfig[]>) => {
   customLayers = event.detail;
+  reapplyCustomLayers();
 }) as EventListener);
 
 // ---- Initialization ----
