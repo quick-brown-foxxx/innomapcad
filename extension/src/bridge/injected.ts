@@ -6,6 +6,10 @@
  *
  * It CANNOT import Zustand or any extension modules.
  * Communication with the content script is via CustomEvent only.
+ *
+ * Strategy: direct injection + heartbeat (no setProps patching).
+ * Layer instances are created ONCE when configs change, cached, and reused.
+ * A low-frequency heartbeat re-injects if React wipes our layers.
  */
 
 // ---- Inline types (cannot import from extension modules) ----
@@ -18,6 +22,7 @@ interface LayerConfig {
 
 interface DeckLike {
   setProps: (props: Record<string, unknown>) => void;
+  props?: { layers?: readonly unknown[] };
 }
 
 // ---- TypeIs guard (inlined since we can't import) ----
@@ -30,37 +35,6 @@ function isDeckInstance(value: unknown): value is DeckLike {
     return false;
   }
   return 'setProps' in value && typeof (value as DeckLike).setProps === 'function';
-}
-
-// ---- Layer merging (inlined since we can't import) ----
-
-function mergeLayers(
-  existingLayers: readonly LayerConfig[],
-  customLayers: readonly LayerConfig[],
-): readonly LayerConfig[] {
-  if (customLayers.length === 0) {
-    return existingLayers;
-  }
-
-  const customById = new Map<string, LayerConfig>();
-  for (const layer of customLayers) {
-    customById.set(layer.id, layer);
-  }
-
-  const merged: LayerConfig[] = existingLayers.map((existing) => {
-    const replacement = customById.get(existing.id);
-    if (replacement !== undefined) {
-      customById.delete(existing.id);
-      return replacement;
-    }
-    return existing;
-  });
-
-  for (const remaining of customById.values()) {
-    merged.push(remaining);
-  }
-
-  return merged;
 }
 
 // ---- Fiber walk ----
@@ -136,70 +110,49 @@ function instantiateLayer(config: LayerConfig): unknown {
   return { id: config.id, ...config.props };
 }
 
-// ---- SetProps patching ----
+// ---- Direct injection + heartbeat ----
 
+let deckRef: DeckLike | null = null;
 let customLayers: readonly LayerConfig[] = [];
-
-/** Brand symbol to detect our own patched setProps and avoid wrapping it. */
-const PATCH_BRAND = '__innomapcad_patched__';
-
-/** The true native setProps, captured exactly once. Never overwritten. */
-let nativeSetProps: ((props: Record<string, unknown>) => void) | null = null;
-
-function patchSetProps(deck: DeckLike): void {
-  // Already patched (by us) — the brand is on the function
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-  if ((deck.setProps as any)[PATCH_BRAND] === true) {
-    return;
-  }
-
-  // Capture the true native setProps exactly once
-  if (nativeSetProps === null) {
-    nativeSetProps = deck.setProps.bind(deck);
-  }
-
-  const callNative = nativeSetProps;
-
-  const patchedFn = (props: Record<string, unknown>): void => {
-    if (customLayers.length === 0) {
-      // Fast path: no custom layers, pass through unchanged
-      callNative(props);
-      return;
-    }
-
-    const existingLayers = Array.isArray(props['layers'])
-      ? (props['layers'] as readonly LayerConfig[])
-      : [];
-
-    const merged = mergeLayers(existingLayers, customLayers);
-
-    // Instantiate custom layer configs into real deck.gl layer objects
-    const instantiated = merged.map((layer) => {
-      // Only instantiate layers that came from our extension (have a type field)
-      // Existing layers from deck.gl are already instances
-      if (customLayers.some((cl) => cl.id === layer.id)) {
-        return instantiateLayer(layer);
-      }
-      return layer;
-    });
-
-    callNative({ ...props, layers: instantiated });
-  };
-
-  // Brand the function so we never wrap our own wrapper
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-member-access
-  (patchedFn as any)[PATCH_BRAND] = true;
-
-  deck.setProps = patchedFn;
-}
+let cachedInstances: readonly unknown[] = [];
 
 /**
- * Forces a re-apply of custom layers by calling setProps with current layers.
- * Used when custom layers change via the update-layers event.
+ * Injects cached custom layer instances into the deck.gl instance.
+ * Filters out any existing layers with the same IDs first, then appends ours.
  */
-function reapplyCustomLayers(): void {
-  // No-op: custom layers are merged on the next setProps call from deck.gl.
-  // deck.gl calls setProps on every frame, so our layers appear automatically.
+function injectCustomLayers(): void {
+  if (deckRef === null || cachedInstances.length === 0) return;
+
+  const currentLayers: readonly unknown[] = (deckRef.props?.layers as unknown[]) ?? [];
+
+  // Filter out our layers from current (by id), then append ours
+  const customIds = new Set(customLayers.map((l) => l.id));
+  const baseLayers = currentLayers.filter(
+    (l) => !(l !== null && typeof l === 'object' && 'id' in l && customIds.has((l as LayerConfig).id)),
+  );
+
+  deckRef.setProps({ layers: [...baseLayers, ...cachedInstances] });
+}
+
+// Heartbeat: re-inject if React wiped our layers
+const HEARTBEAT_MS = 500;
+let heartbeatId: ReturnType<typeof setInterval> | null = null;
+
+function startHeartbeat(): void {
+  if (heartbeatId !== null) return;
+  heartbeatId = setInterval(() => {
+    if (deckRef === null || cachedInstances.length === 0) return;
+
+    const currentLayers: readonly unknown[] = (deckRef.props?.layers as unknown[]) ?? [];
+    const customIds = new Set(customLayers.map((l) => l.id));
+    const hasOurLayers = currentLayers.some(
+      (l) => l !== null && typeof l === 'object' && 'id' in l && customIds.has((l as LayerConfig).id),
+    );
+
+    if (!hasOurLayers) {
+      injectCustomLayers();
+    }
+  }, HEARTBEAT_MS);
 }
 
 // ---- Map click / hover handling for placement mode ----
@@ -313,7 +266,9 @@ document.addEventListener('innomapcad:stop-placing', () => {
 
 document.addEventListener('innomapcad:update-layers', ((event: CustomEvent<readonly LayerConfig[]>) => {
   customLayers = event.detail;
-  reapplyCustomLayers();
+  // Instantiate ONCE, cache for reuse
+  cachedInstances = customLayers.map((layer) => instantiateLayer(layer));
+  injectCustomLayers();
 }) as EventListener);
 
 // ---- Initialization ----
@@ -332,7 +287,8 @@ function tryInit(): boolean {
     return false;
   }
 
-  patchSetProps(deck);
+  deckRef = deck;
+  startHeartbeat();
 
   document.dispatchEvent(
     new CustomEvent('innomapcad:deck-ready'),
@@ -360,7 +316,7 @@ function startInit(): void {
   }, INIT_POLL_INTERVAL_MS);
 }
 
-// ---- MutationObserver to re-patch after React re-renders ----
+// ---- MutationObserver to re-acquire deck ref if canvas is replaced ----
 
 function observeReRenders(): void {
   const wrapper = document.querySelector('#deckgl-wrapper');
@@ -386,8 +342,10 @@ function observeReRenders(): void {
       return;
     }
 
-    // patchSetProps checks the brand — skips if already patched
-    patchSetProps(deck);
+    // Re-acquire the deck reference (canvas was replaced by React)
+    deckRef = deck;
+    // Re-inject cached layers into the new deck instance
+    injectCustomLayers();
   });
 
   // Only watch direct children of wrapper — NOT subtree
