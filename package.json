@@ -1,0 +1,14 @@
+{
+  "name": "innomapcad",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "test:all": "cd backend && uv run pytest -v && cd ../extension && pnpm test",
+    "lint:all": "cd backend && uv run ruff check && uv run basedpyright && cd ../extension && pnpm lint",
+    "test:e2e": "npx playwright test",
+    "build:extension": "cd extension && pnpm build"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.52.0"
+  }
+}

@@ -1,8 +1,12 @@
 # OS
 .DS_Store
 
+# Node
+node_modules/
+
 # Test results
 test-results/
+playwright-report/
 
 # Ralph working files
 ralph/archive/
