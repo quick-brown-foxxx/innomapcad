@@ -8,11 +8,13 @@ import {
 import { FloatingPanel } from './components/FloatingPanel';
 import { loadBackendData, subscribeToVisibilityChanges } from './services/data-loader';
 import { useDeckStore } from './stores/deck-store';
+import { useGeoDataStore } from './stores/geo-data-store';
 import { usePlacementStore } from './stores/placement-store';
 import { usePresetsStore } from './stores/presets-store';
 import { useUIStore } from './stores/ui-store';
 import { PANEL_CSS } from './styles/panel';
 import { createBuildingPolygon } from './utils/building-geometry';
+import { validatePlacement } from './validation/check-placement';
 
 import type { Preset } from './lib/schemas';
 import type { LayerConfig } from './bridge/deck-types';
@@ -239,6 +241,50 @@ function addBuildingLayer(
   deckStore.addLayer(layerConfig);
 }
 
+/** Color for valid building placement. */
+const BUILDING_COLOR_VALID: readonly [number, number, number, number] = [82, 196, 26, 200] as const;
+
+/** Color for invalid building placement. */
+const BUILDING_COLOR_INVALID: readonly [number, number, number, number] = [255, 77, 79, 200] as const;
+
+/**
+ * Runs client-side validation on a placed building and updates stores + layer color.
+ */
+function runBuildingValidation(
+  polygon: ReturnType<typeof createBuildingPolygon>,
+  defaultColor: readonly [number, number, number, number],
+  height: number,
+): void {
+  const uiStore = useUIStore.getState();
+  const geoData = useGeoDataStore.getState();
+
+  // If GeoJSON data is not loaded yet, keep the default color
+  if (geoData.cadastralData === null || geoData.protectionZonesData === null) {
+    uiStore.setValidationStatus('idle');
+    uiStore.setValidationConflicts([]);
+    addBuildingLayer(polygon.coordinates[0], defaultColor, height);
+    return;
+  }
+
+  uiStore.setValidationStatus('checking');
+
+  const result = validatePlacement(
+    polygon,
+    geoData.protectionZonesData,
+    geoData.cadastralData,
+  );
+
+  if (result.valid) {
+    uiStore.setValidationStatus('valid');
+    uiStore.setValidationConflicts([]);
+    addBuildingLayer(polygon.coordinates[0], BUILDING_COLOR_VALID, height);
+  } else {
+    uiStore.setValidationStatus('invalid');
+    uiStore.setValidationConflicts(result.conflicts);
+    addBuildingLayer(polygon.coordinates[0], BUILDING_COLOR_INVALID, height);
+  }
+}
+
 /**
  * Listens for map-click events from the page script and places a building.
  */
@@ -264,7 +310,8 @@ function listenForMapClick(): void {
       polygon,
     });
 
-    addBuildingLayer(polygon.coordinates[0], color, preset.height_m);
+    // Run validation and update building layer color accordingly
+    runBuildingValidation(polygon, color, preset.height_m);
 
     // Stop placing mode on the page side (cursor reset)
     document.dispatchEvent(new CustomEvent('innomapcad:stop-placing'));

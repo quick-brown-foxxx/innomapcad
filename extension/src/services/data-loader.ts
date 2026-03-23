@@ -10,6 +10,7 @@ import {
   LAYER_IDS,
 } from '@/bridge/layer-config';
 import { useDeckStore } from '@/stores/deck-store';
+import { useGeoDataStore } from '@/stores/geo-data-store';
 import { usePresetsStore } from '@/stores/presets-store';
 import { useUIStore } from '@/stores/ui-store';
 
@@ -86,6 +87,7 @@ export async function loadBackendData(): Promise<boolean> {
   const cadastralResult = await backendApi.getLayers('cadastral');
   if (cadastralResult.ok) {
     cadastralData = cadastralResult.value;
+    useGeoDataStore.getState().setCadastralData(cadastralResult.value);
     anySuccess = true;
   }
 
@@ -93,6 +95,7 @@ export async function loadBackendData(): Promise<boolean> {
   const zonesResult = await backendApi.getLayers('protection_zones');
   if (zonesResult.ok) {
     protectionZonesData = zonesResult.value;
+    useGeoDataStore.getState().setProtectionZonesData(zonesResult.value);
     anySuccess = true;
   }
 
