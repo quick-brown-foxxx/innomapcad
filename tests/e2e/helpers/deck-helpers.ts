@@ -1,7 +1,10 @@
 import type { Page } from '@playwright/test';
 
+/**
+ * Get all deck.gl layer IDs by walking the React fiber tree
+ * from the deckgl-overlay canvas element.
+ */
 export async function getDeckLayerIds(page: Page): Promise<string[]> {
-  // Stub — will be implemented when deck.gl bridge is ready
   return page.evaluate(() => {
     const overlay = document.getElementById('deckgl-overlay');
     if (!overlay) return [];
@@ -10,20 +13,22 @@ export async function getDeckLayerIds(page: Page): Promise<string[]> {
     );
     if (!fiberKey) return [];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let fiber = (overlay as any)[fiberKey];
-    while (fiber && !fiber?.ref?.current?.deck) fiber = fiber.return;
-    const deck = fiber?.ref?.current?.deck;
+    let fiber = (overlay as any)[fiberKey] as
+      | { return: unknown; ref?: { current?: { deck?: unknown } } }
+      | undefined;
+    while (fiber && !fiber?.ref?.current?.deck) {
+      fiber = fiber.return as typeof fiber;
+    }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return deck?.props?.layers?.map((l: any) => l.id) || [];
+    const deck = fiber?.ref?.current?.deck as any;
+    const layers: Array<{ id: string }> = deck?.props?.layers ?? [];
+    return layers.map((l) => l.id);
   });
 }
 
-export async function waitForExtensionReady(page: Page): Promise<void> {
-  await page.waitForSelector('[data-testid="innomap-panel"]', {
-    timeout: 15000,
-  });
-}
-
+/**
+ * Check whether a deck.gl instance exists by walking the React fiber tree.
+ */
 export async function getDeckInstance(page: Page): Promise<boolean> {
   return page.evaluate(() => {
     const overlay = document.getElementById('deckgl-overlay');
@@ -33,8 +38,28 @@ export async function getDeckInstance(page: Page): Promise<boolean> {
     );
     if (!fiberKey) return false;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let fiber = (overlay as any)[fiberKey];
-    while (fiber && !fiber?.ref?.current?.deck) fiber = fiber.return;
-    return fiber?.ref?.current?.deck ? true : false;
+    let fiber = (overlay as any)[fiberKey] as
+      | { return: unknown; ref?: { current?: { deck?: unknown } } }
+      | undefined;
+    while (fiber && !fiber?.ref?.current?.deck) {
+      fiber = fiber.return as typeof fiber;
+    }
+    return fiber?.ref?.current?.deck != null;
   });
+}
+
+/**
+ * Wait for the extension panel to appear inside the shadow DOM.
+ */
+export async function waitForExtensionReady(page: Page): Promise<void> {
+  await page.waitForFunction(
+    () => {
+      const root = document.getElementById('innomapcad-root');
+      return (
+        root?.shadowRoot?.querySelector('[data-testid="innomap-panel"]') !==
+        null
+      );
+    },
+    { timeout: 15_000 },
+  );
 }
