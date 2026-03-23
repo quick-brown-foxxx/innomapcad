@@ -1,0 +1,52 @@
+name: Release Extension
+
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: extension/pnpm-lock.yaml
+
+      - name: Install and build extension
+        run: |
+          cd extension
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      - name: Read version from manifest
+        id: version
+        run: |
+          VERSION=$(jq -r '.version' extension/manifest.json)
+          SHORT_SHA=${GITHUB_SHA::7}
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v${VERSION}-${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Zip extension
+        run: |
+          cd extension/dist
+          zip -r "../../innomapcad-extension-v${{ steps.version.outputs.version }}.zip" .
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: InnoMapCAD v${{ steps.version.outputs.version }}
+          prerelease: true
+          files: innomapcad-extension-v${{ steps.version.outputs.version }}.zip
+          generate_release_notes: true
