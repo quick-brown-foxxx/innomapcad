@@ -1,0 +1,616 @@
+project: "InnoMapCAD — GIS-SAPR Chrome Extension + FastAPI Backend"
+branchName: "ralph/implement-gis-sapr"
+description: >
+  Chrome Extension (Manifest V3) injected into 4dinno.ru digital twin.
+  Adds GIS layers (cadastral parcels, protection zones) as deck.gl overlays,
+  interactive building placement from preset catalog, and instant validation
+  (Turf.js client + Shapely server). Extension is a full React/TypeScript app.
+  Backend is FastAPI + Shapely with in-memory GeoJSON data.
+
+userStories:
+  # ============================================================
+  # STAGE 0: Project scaffolding + cleanup + documentation
+  # ============================================================
+
+  - id: "US-001"
+    title: "Backend project scaffolding"
+    description: >
+      As a developer, I want the backend Python project fully scaffolded with
+      strict tooling so that all code written from the start is type-safe and linted.
+    acceptanceCriteria:
+      - "backend/ directory exists with src layout: main.py, routers/, services/, models.py"
+      - "pyproject.toml configured with deps: fastapi, uvicorn, shapely, pyproj, httpx"
+      - "Dev deps: pytest, ruff, basedpyright, pre-commit"
+      - "basedpyright strict mode configured (typeCheckingMode=strict, reportAny=error)"
+      - "ruff configured (line-length=120, double quotes, isort)"
+      - "tests/ directory with empty conftest.py"
+      - "`cd backend && uv sync` succeeds"
+      - "`cd backend && uv run ruff check` returns 0 errors"
+      - "`cd backend && uv run basedpyright` returns 0 errors"
+      - "`cd backend && uv run pytest` runs with 0 tests, 0 errors"
+      - "Typecheck passes"
+    priority: 1
+    passes: false
+    notes: >
+      Follow setting-up-python-projects and writing-python-code skills.
+      Use msgspec.Struct for external data, dataclass for domain objects,
+      Result pattern with rusty-results. See docs/PHILOSOPHY.md for conventions.
+
+  - id: "US-002"
+    title: "Extension project scaffolding (React/TypeScript)"
+    description: >
+      As a developer, I want the Chrome extension project scaffolded as a full
+      React/TypeScript app with Vite, strict ESLint, and test infrastructure.
+    acceptanceCriteria:
+      - "extension/ directory with package.json, tsconfig.json, vite.config.ts"
+      - "TypeScript strict mode: strict=true, noUncheckedIndexedAccess, exactOptionalPropertyTypes"
+      - "ESLint flat config with typescript-eslint strict-type-checked preset"
+      - "No any allowed (@typescript-eslint/no-explicit-any: error)"
+      - "Vite configured to build Chrome extension (content script bundle + manifest copy)"
+      - "manifest.json: Manifest V3, content_scripts matching 4dinno.ru/map/*"
+      - "React 18+ and react-dom as dependencies"
+      - "Zustand, zod, @turf/turf as dependencies"
+      - "Vitest configured (environment: node, tests/unit/**/*.test.ts)"
+      - "Prettier configured (singleQuote, tabWidth 2, tailwindcss plugin)"
+      - "`cd extension && pnpm install` succeeds"
+      - "`cd extension && pnpm build` produces dist/ with manifest.json"
+      - "`cd extension && pnpm lint` returns 0 errors"
+      - "`cd extension && pnpm test` runs with 0 tests, 0 errors"
+      - "Typecheck passes"
+    priority: 2
+    passes: false
+    notes: >
+      Follow writing-react-ts-code skill for ESLint/TS config.
+      Use CRXJS Vite plugin or manual Vite config for Chrome extension build.
+      Content script will mount React into a shadow DOM container injected into the page.
+      See docs/PHILOSOPHY.md for tooling philosophy.
+
+  - id: "US-003"
+    title: "Root infrastructure (docker-compose, Playwright, scripts)"
+    description: >
+      As a developer, I want root-level infrastructure so that I can run all
+      tests and start the full stack with single commands.
+    acceptanceCriteria:
+      - "docker-compose.yml at repo root with backend service (port 8000)"
+      - "playwright.config.ts at repo root with webServer starting backend"
+      - "tests/e2e/ directory with fixtures.ts (extension context fixture using launchPersistentContext)"
+      - "tests/e2e/helpers/ with deck-helpers.ts and panel-helpers.ts stubs"
+      - "Root package.json with scripts: test:all, lint:all"
+      - "test:all runs backend pytest + extension vitest"
+      - "lint:all runs backend ruff+basedpyright + extension eslint"
+      - "Playwright fixture uses --headless=new + --load-extension for extension e2e"
+      - "All lint:all and test:all commands pass clean"
+      - "Typecheck passes"
+    priority: 3
+    passes: false
+    notes: >
+      See docs/2.PLAN.TESTING_STRATEGY.md for Playwright fixture details.
+      Chrome binary path: /home/lord/.cache/puppeteer-browsers/chrome/linux-146.0.7680.153/chrome-linux64/chrome.
+      Use headless: false + --headless=new args (not Playwright headless: true).
+      Extension path for e2e: extension/dist/.
+
+  - id: "US-004"
+    title: "Cleanup pre-existing test artifacts"
+    description: >
+      As a developer, I want to remove the prototype/test directories and scripts
+      that were used during initial exploration, so the repo is clean for implementation.
+    acceptanceCriteria:
+      - "test-extension/ directory removed (was a minimal test extension prototype)"
+      - "test-extension-playwright/ directory removed (was a Playwright proof-of-concept)"
+      - "scripts/chrome-devtools-mcp-with-extension.sh removed or moved to docs/archive/"
+      - "scripts/manual-launch-chrome-with-extension.sh removed or moved to docs/archive/"
+      - "Any node_modules, test-results, or other generated files in removed dirs are gone"
+      - ".gitignore updated if needed"
+      - "Existing docs/ and ralph/ directories are preserved untouched"
+      - "Git commit with cleanup changes"
+      - "All lint:all and test:all commands still pass"
+    priority: 4
+    passes: false
+    notes: >
+      The test-extension/ and test-extension-playwright/ were proof-of-concept
+      experiments for validating the Playwright + Chrome extension approach.
+      Their findings are captured in docs/2.PLAN.TESTING_STRATEGY.md.
+      The scripts/ helper scripts were for manual Chrome DevTools MCP testing.
+      Keep anything that's still useful, archive or delete the rest.
+
+  - id: "US-005"
+    title: "Create README.md and update AGENTS.md"
+    description: >
+      As a developer (human or AI), I want brief README.md and comprehensive AGENTS.md
+      so that anyone can understand the project, set it up, and contribute.
+    acceptanceCriteria:
+      - "README.md at repo root: project description, architecture diagram (text), quick start, demo scenario"
+      - "README.md includes: prerequisites (Chrome, Python 3.12+, Node 20+, uv, pnpm), setup steps, how to run"
+      - "README.md includes: how to load extension in Chrome, how to start backend"
+      - "README.md includes: link to PRD (docs/0.PRD.md) and plan (docs/2.PLAN.PT2.md)"
+      - "AGENTS.md updated: project architecture, directory layout, key technical decisions"
+      - "AGENTS.md includes: quality commands (lint, test, typecheck for both stacks)"
+      - "AGENTS.md includes: key patterns (Result, Zustand stores, deck.gl bridge, fiber walk)"
+      - "AGENTS.md includes: testing strategy summary (real > mocked, TDD, e2e on real site)"
+      - "CLAUDE.md symlinked to AGENTS.md"
+    priority: 5
+    passes: false
+    notes: >
+      README.md is for humans (hackathon judges, teammates).
+      AGENTS.md is for AI agents (ralph, claude code) — high-level orientation.
+      Current AGENTS.md is a stub that just says 'read PHILOSOPHY.md'.
+      Expand it with real project-specific info now that scaffolding is done.
+
+  # ============================================================
+  # STAGE 0.5: GeoJSON data acquisition
+  # ============================================================
+
+  - id: "US-006"
+    title: "Research GeoJSON data sources for Innopolis"
+    description: >
+      As a developer, I want to research and evaluate available data sources
+      to determine the best way to get real cadastral and protection zone
+      GeoJSON data for the Innopolis territory.
+    acceptanceCriteria:
+      - "Document your findings in docs/1.INFO.DATA_ACQUISITION.md"
+      - "Test NSPD API (nspd.gov.ru) accessibility: can we fetch cadastral data by bbox?"
+      - "Test rosreestr2coord Python library: does it work for Innopolis coordinates?"
+      - "Check if 4dinno.ru itself serves usable GeoJSON layers (GET /media/layers/*.geojson)"
+      - "Check OpenStreetMap Overpass API for Innopolis buildings/landuse data"
+      - "For each source: document URL, format, accessibility, data quality"
+      - "Recommend approach: real NSPD data vs generated mock data vs mix"
+      - "If NSPD unavailable: document fallback plan with realistic generated data"
+      - "No code changes required — this is a research story"
+    priority: 6
+    passes: false
+    notes: >
+      See docs/1.INFO.DATA_SOURCES.md for detailed source analysis.
+      Innopolis bbox approximately: lon 48.72-48.76, lat 55.74-55.76.
+      NSPD may require Referer: https://nspd.gov.ru header.
+      4dinno.ru API: GET /api/v2/layers/ru/layers/anonymous/ lists available layers.
+      The 'territory' slug may have useful GeoJSON at /media/layers/territory.geojson.
+      Use web search and web fetch tools for API testing.
+
+  - id: "US-007"
+    title: "Acquire and prepare GeoJSON data files"
+    description: >
+      As a developer, I want real or high-quality generated GeoJSON data files
+      for cadastral parcels and protection zones around Innopolis.
+    acceptanceCriteria:
+      - "backend/data/cadastral.geojson: FeatureCollection with 5+ cadastral parcels"
+      - "Each cadastral feature has properties: cadnum (cadastral number), area_m2, category, permitted_use"
+      - "backend/data/protection_zones.geojson: FeatureCollection with 3+ protection zones"
+      - "Protection zone types: gas_pipeline (50m buffer), power_line (25m buffer), water_protection (200m buffer)"
+      - "Each zone feature has properties: zone_id, zone_type, description, buffer_m"
+      - "All coordinates in WGS-84, centered around Innopolis (lon ~48.74, lat ~55.75)"
+      - "Geometries are valid (no self-intersections, rings closed properly)"
+      - "Data is realistic: parcels don't wildly overlap, zones follow linear features"
+      - "If real NSPD data obtained: scripts/fetch_nspd_data.py with fetch + transform logic"
+      - "If generated: scripts/generate_mock_data.py with Shapely-based generation"
+      - "Data validated: `python -c 'import json; json.load(open(\"backend/data/cadastral.geojson\"))'` succeeds"
+      - "Typecheck passes (if scripts written in Python)"
+    priority: 7
+    passes: false
+    notes: >
+      Use findings from US-006 to decide approach.
+      If using NSPD: fetch via rosreestr2coord or direct API, transform to our schema.
+      If generating: use Shapely to create realistic polygons.
+      Parcels should form a grid-like pattern (typical for planned cities like Innopolis).
+      Protection zones should cross some parcels (to make validation meaningful).
+      Some parcels should be fully clear (to allow valid placement in tests).
+      The extension/data/ may also need copies for offline/degraded mode.
+
+  # ============================================================
+  # STAGE 1: Backend — data + API + tests
+  # ============================================================
+
+  - id: "US-008"
+    title: "Backend: FastAPI skeleton + health + GeoJSON data store"
+    description: >
+      As a developer, I want the FastAPI app skeleton with CORS, lifespan,
+      health endpoint, and in-memory GeoJSON data loading.
+    acceptanceCriteria:
+      - "main.py with FastAPI app, CORS middleware (origins: https://4dinno.ru, localhost regex)"
+      - "Lifespan context manager loads GeoJSON files at startup"
+      - "services/data_store.py: in-memory store holding cadastral + protection_zones FeatureCollections"
+      - "Loads data from backend/data/cadastral.geojson and backend/data/protection_zones.geojson"
+      - "GET /health returns {status: ok, layers_loaded: 2}"
+      - "tests/test_health.py with 2+ tests (happy path + response shape)"
+      - "tests/conftest.py with TestClient fixture"
+      - "`uv run pytest` all green"
+      - "Typecheck passes"
+    priority: 8
+    passes: false
+    notes: >
+      Follow testing-python skill: real Shapely, real GeoJSON, no mocks.
+      Use msgspec.Struct for response models. Coordinates WGS-84.
+      TDD: write tests first, then implement.
+      Data files created in US-007 must exist before this story.
+
+  - id: "US-009"
+    title: "Backend: Presets + layers endpoints"
+    description: >
+      As a developer, I want API endpoints for building presets and GeoJSON
+      layer data so the extension can load them at startup.
+    acceptanceCriteria:
+      - "GET /api/v1/presets returns JSON array of 5 presets"
+      - "Each preset has: slug, name, width_m, length_m, floors, height_m, setback_m, color"
+      - "Presets: residential, office, transformer, parking, warehouse (per docs/2.PLAN.PT1.md)"
+      - "GET /api/v1/layers/cadastral returns GeoJSON FeatureCollection"
+      - "GET /api/v1/layers/protection_zones returns GeoJSON FeatureCollection"
+      - "GET /api/v1/layers/nonexistent returns 404"
+      - "tests/test_presets.py with 2+ tests"
+      - "tests/test_layers.py with 3+ tests (cadastral, protection_zones, 404)"
+      - "`uv run pytest` all green"
+      - "Typecheck passes"
+    priority: 9
+    passes: false
+    notes: >
+      TDD: write tests first. Use TestClient fixture from conftest.
+      Presets are hardcoded in code (single source of truth).
+      Layer data served from in-memory data_store loaded at startup.
+
+  - id: "US-010"
+    title: "Backend: Validate endpoint (Shapely + pyproj)"
+    description: >
+      As a developer, I want a validation endpoint that checks building geometry
+      against protection zones and cadastral parcels using real Shapely operations.
+    acceptanceCriteria:
+      - "POST /api/v1/validate accepts {geometry: GeoJSON Polygon, preset_slug: string}"
+      - "Returns {valid: bool, conflicts: [{layer, type, description, overlap_area_m2?}]}"
+      - "Checks intersects with protection zones"
+      - "Checks within cadastral parcels"
+      - "Checks setback_violation using pyproj UTM (EPSG:32639) buffer"
+      - "Returns 422 for invalid geometry (empty coords, Point instead of Polygon)"
+      - "tests/test_validate.py with 4+ tests: valid placement, zone intersection, setback violation, bad geometry"
+      - "Uses real Shapely operations, real GeoJSON data, no mocked geometry"
+      - "`uv run pytest` all green"
+      - "Typecheck passes"
+    priority: 10
+    passes: false
+    notes: >
+      TDD: write tests first with real coordinates near Innopolis.
+      See testing-python skill for fixture patterns (building_in_zone, building_outside_zones).
+      Setback buffer: project to UTM via pyproj, buffer in meters, project back to WGS-84.
+      This is the core business logic — invest in thorough tests.
+
+  - id: "US-011"
+    title: "Backend: Dockerfile"
+    description: >
+      As a developer, I want a Dockerfile for the backend so it can run
+      in a container via docker-compose.
+    acceptanceCriteria:
+      - "backend/Dockerfile using python:3.12-slim base"
+      - "Installs uv, copies pyproject.toml, syncs deps, copies source"
+      - "CMD runs uvicorn main:app --host 0.0.0.0 --port 8000"
+      - "docker-compose.yml backend service builds from backend/"
+      - "docker-compose up backend starts and /health returns 200"
+      - "Typecheck passes"
+    priority: 11
+    passes: false
+    notes: ""
+
+  # ============================================================
+  # STAGE 2: Extension — skeleton + deck.gl + UI
+  # ============================================================
+
+  - id: "US-012"
+    title: "Extension: Content script + React panel mount"
+    description: >
+      As a developer, I want the content script to detect the map page,
+      create a shadow DOM container, and mount the React floating panel.
+    acceptanceCriteria:
+      - "Content script (content.tsx) runs on 4dinno.ru/map/* pages"
+      - "Waits for #deckgl-overlay element via MutationObserver or polling"
+      - "Creates a container div, attaches shadow DOM for style isolation"
+      - "Mounts React app (FloatingPanel component) into shadow DOM"
+      - "FloatingPanel renders as a positioned panel (dark theme, right side)"
+      - "Panel has data-testid='innomap-panel'"
+      - "Extension builds cleanly: pnpm build produces dist/ with manifest.json + content script bundle"
+      - "Typecheck passes"
+      - "Verify in browser: load extension on 4dinno.ru, panel visible"
+    priority: 12
+    passes: false
+    notes: >
+      Content script runs in isolated world. React app is mounted in shadow DOM
+      to avoid CSS conflicts with the host page. Use Tailwind CSS inside shadow DOM.
+      Injected script for page-context access (deck.gl) will be added in US-013.
+
+  - id: "US-013"
+    title: "Extension: deck.gl bridge (fiber walk + setProps patch)"
+    description: >
+      As a developer, I want to access the existing deck.gl instance on the page
+      and patch setProps to inject custom layers.
+    acceptanceCriteria:
+      - "Page-context script (injected.ts) gets deck.gl instance via React fiber walk"
+      - "Fiber walk: #deckgl-overlay → __reactFiber → walk up to ref.current.deck"
+      - "TypeIs guard narrows the single any-point (fiber walk result) to typed DeckInstance"
+      - "setProps patched to automatically include custom layers alongside existing ones"
+      - "MutationObserver re-patches after React re-renders"
+      - "Communication between content script and page script via CustomEvent or postMessage"
+      - "Zustand store (deck-store.ts) tracks: deckReady, customLayers, patchedSetProps"
+      - "Unit test for layer merging logic (pure function, no browser needed)"
+      - "Typecheck passes"
+    priority: 13
+    passes: false
+    notes: >
+      The fiber walk is the single any-point in the extension. Use TypeIs guard
+      to narrow immediately. See docs/1.INFO.CURRENT_MAP_ANALYSIS.md for DOM structure.
+      Deck instance path: overlay[fiberKey].return.return.ref.current.deck.
+      Communication pattern: page script dispatches CustomEvent on document,
+      content script listens via window.addEventListener.
+
+  - id: "US-014"
+    title: "Extension: Zustand stores + UI panel components"
+    description: >
+      As a developer, I want the floating panel UI with layer toggles,
+      preset palette, and validation status, backed by Zustand stores.
+    acceptanceCriteria:
+      - "ui-store.ts: selectedPreset, layerVisibility (cadastral, protectionZones), validationStatus"
+      - "Layer toggle components (2 toggles: cadastral parcels, protection zones)"
+      - "Preset palette with 5 cards showing name, dimensions, color swatch"
+      - "Validation status area: idle / checking / valid / invalid with conflict list"
+      - "Buttons: 'Проверить' (server validate), 'Убрать объект' (remove building)"
+      - "Dark theme styling matching 4dinno.ru (Ant Design dark)"
+      - "All components have explicit return types, readonly props, named exports"
+      - "Typecheck passes"
+      - "Verify in browser: panel shows toggles, presets, status area"
+    priority: 14
+    passes: false
+    notes: >
+      Follow managing-state skill for Zustand store pattern.
+      Follow building-ui-components skill for component structure.
+      Use Tailwind CSS for styling (inside shadow DOM).
+      Store actions return void (UI state, not API results).
+
+  - id: "US-015"
+    title: "Extension: API client with Zod validation"
+    description: >
+      As a developer, I want a typed API client that fetches presets and layers
+      from the backend with Zod schema validation.
+    acceptanceCriteria:
+      - "lib/api-client.ts with typed fetch wrapper returning Result<T, ApiError>"
+      - "Zod schemas for: preset response, GeoJSON FeatureCollection, validate response"
+      - "api/backend-api.ts with: getPresets(), getLayers(slug), postValidate(geometry, presetSlug)"
+      - "Every response validated via zodSchema.safeParse() before returning"
+      - "Network errors caught and wrapped in Result error"
+      - "Base URL configurable (default: http://localhost:8000)"
+      - "Unit tests for Zod schema validation (valid + invalid payloads)"
+      - "Typecheck passes"
+    priority: 15
+    passes: false
+    notes: >
+      Follow building-api-clients skill for Result pattern and apiRequestWrapper.
+      No Orval/codegen — schemas are simple enough to write by hand.
+      The extension API client is simpler than a full Next.js app client
+      (no auth, no cookies, just fetch + Zod).
+
+  # ============================================================
+  # STAGE 3: Integration — extension ↔ backend
+  # ============================================================
+
+  - id: "US-016"
+    title: "Extension: Load data from backend + render GIS layers"
+    description: >
+      As a developer, I want the extension to fetch GeoJSON layers and presets
+      from the backend at startup and render them on the deck.gl map.
+    acceptanceCriteria:
+      - "On extension init: fetch presets + cadastral + protection_zones from backend"
+      - "Cadastral layer: blue semi-transparent fill (#4A90D9, opacity 0.3) + blue stroke"
+      - "Protection zones layer: red semi-transparent fill (#FF4444, opacity 0.3)"
+      - "Layers injected via deck bridge setProps patch"
+      - "Layer visibility controlled by ui-store toggles"
+      - "Toggling a layer in UI immediately shows/hides it on the map"
+      - "Presets loaded into ui-store for palette display"
+      - "If backend unavailable: show warning in panel, continue without layers"
+      - "Typecheck passes"
+      - "Verify in browser: layers visible on map, toggles work"
+    priority: 16
+    passes: false
+    notes: >
+      This is the first story that connects extension to backend.
+      docker-compose up backend must be running.
+      Layer IDs: 'cadastral-layer', 'protection-zones-layer'.
+
+  - id: "US-017"
+    title: "Manual testing checkpoint: backend + layers integration"
+    description: >
+      As a developer, I want to manually verify the integration between
+      backend and extension using Chrome DevTools MCP, catching visual
+      bugs and issues that automated tests might miss.
+    acceptanceCriteria:
+      - "Start backend: docker-compose up backend (or uv run uvicorn)"
+      - "Build extension: cd extension && pnpm build"
+      - "Load extension in Chrome and navigate to 4dinno.ru/map/territory"
+      - "Take screenshot: verify panel is visible, positioned correctly, dark theme matches"
+      - "Verify via evaluate_script: deck.gl instance found, layers injected"
+      - "Verify via screenshot: cadastral parcels visible (blue polygons on map)"
+      - "Verify via screenshot: protection zones visible (red semi-transparent areas)"
+      - "Test layer toggles: click each toggle, verify layers show/hide"
+      - "Verify via list_console_messages: no JavaScript errors in console"
+      - "Verify via list_network_requests: backend API calls succeed (200)"
+      - "Document any bugs found in ralph/current/progress.txt as 'BUGS FOUND' section"
+      - "If critical bugs found: note them for fixing before proceeding"
+    priority: 17
+    passes: false
+    notes: >
+      Use Chrome DevTools MCP tools for this manual testing:
+      navigate_page, take_screenshot, evaluate_script, list_console_messages,
+      list_network_requests, wait_for, click.
+      This is an AI-driven manual testing checkpoint, not automated tests.
+      The goal is to catch visual issues, layout problems, and integration bugs
+      that unit/integration tests don't cover.
+      If bugs are found, document them. Critical bugs should be fixed before
+      continuing to placement stories. Non-critical can be deferred to US-022.
+
+  # ============================================================
+  # STAGE 4: Placement + validation
+  # ============================================================
+
+  - id: "US-018"
+    title: "Extension: Building placement on map click"
+    description: >
+      As a user, I want to select a building preset and click on the map
+      to place a building as an extruded 3D polygon. UX reference is Cities Skylines or RTS games
+    acceptanceCriteria:
+      - "Selecting a preset in palette activates placement mode (cursor changes)"
+      - "Hovering over the map floats the building under the cursor"
+      - "Clicking on map canvas places a building at click coordinates"
+      - "Building is a rectangle rotated to north, sized per preset (width_m x length_m)"
+      - "Building rendered as extruded SolidPolygonLayer (height from preset)"
+      - "Building color matches preset color"
+      - "Placed building stored in Zustand (placement-store.ts)"
+      - "Re-clicking on map unbuilds the building and makes it floating over the map again"
+      - "Building has rotation/scaling/editing/remove tooltip"
+      - "'Убрать объект' button removes the placed building"
+      - "Coordinate conversion: screen pixels → lng/lat using deck.gl viewState"
+      - "Typecheck passes"
+      - "Verify in browser with subagent: select preset, click map, building appears as 3D shape"
+    priority: 18
+    passes: false
+    notes: >
+      Building polygon: create rectangle centered on click point using Turf.js
+      transformTranslate or manual coordinate math. Width/length in meters
+      converted to degree offsets (approximate at Innopolis latitude).
+      Only one building at a time (simplification for hackathon).
+
+  - id: "US-019"
+    title: "Extension: Client-side Turf.js validation + visual feedback"
+    description: >
+      As a user, I want instant visual feedback when I place a building:
+      green if valid, red if it conflicts with a protection zone.
+    acceptanceCriteria:
+      - "On building placement: Turf.js checks intersection with all protection zones"
+      - "Turf.js checks if building is within any cadastral parcel"
+      - "Setback buffer visualized as orange outline around building"
+      - "Valid placement: building outline green (#00FF00)"
+      - "Invalid placement: building outline red (#FF0000), conflicting zones highlighted"
+      - "Validation result displayed in panel status area (valid/invalid + zone names)"
+      - "Validation runs instantly on placement and on every move"
+      - "Unit tests: checkIntersection (overlap, no-overlap), checkWithinParcel"
+      - "Unit tests use real GeoJSON from backend/data/"
+      - "Typecheck passes"
+      - "Verify in browser: place in zone → red, place outside → green"
+    priority: 19
+    passes: false
+    notes: >
+      TDD: write unit tests for validation functions first.
+      Follow testing-react-ts skill: never mock Turf.js, use real GeoJSON fixtures.
+      Pure validation functions in src/validation/ — no browser deps, fully unit-testable.
+
+  - id: "US-020"
+    title: "Extension: Server validation button + result display"
+    description: >
+      As a user, I want to click 'Проверить' to get authoritative server-side
+      validation with detailed conflict information.
+    acceptanceCriteria:
+      - "'Проверить' button enabled only when a building is placed"
+      - "Click sends POST /api/v1/validate with building geometry + preset_slug"
+      - "Loading spinner while request in flight"
+      - "Success: display valid/invalid status + conflict list in panel"
+      - "Each conflict shows: layer name, violation type, description"
+      - "Network error: show 'Сервер недоступен' message"
+      - "Result stored in validation-store or ui-store"
+      - "Typecheck passes"
+      - "Verify in browser: place building, click Проверить, see server result"
+    priority: 20
+    passes: false
+    notes: >
+      Uses API client from US-015. Result pattern: check success/error.
+      Server validation is authoritative — Turf.js is only for instant preview.
+
+  - id: "US-021"
+    title: "Manual testing checkpoint: full demo scenario"
+    description: >
+      As a developer, I want to manually walk through the complete demo scenario
+      from the PRD using Chrome DevTools MCP, verifying the full user journey
+      and catching any remaining bugs.
+    acceptanceCriteria:
+      - "Full PRD demo scenario executed step by step:"
+      - "1. Navigate to 4dinno.ru/map/territory — extension auto-injects"
+      - "2. Verify GIS layers visible (cadastral + protection zones)"
+      - "3. Select preset 'Жилой дом' in floating panel"
+      - "4. Click on map inside a protection zone — building appears, RED status"
+      - "5. Take screenshot showing red validation state"
+      - "6. Click on map in clear area — building moves, GREEN status"
+      - "7. Take screenshot showing green validation state"
+      - "8. Click 'Проверить' — server validation result appears in panel"
+      - "9. Take screenshot showing server validation result"
+      - "10. Verify no console errors throughout"
+      - "Document any bugs found in ralph/current/progress.txt as 'DEMO BUGS' section"
+      - "If demo-breaking bugs found: note them for fixing in US-022"
+    priority: 21
+    passes: false
+    notes: >
+      This follows the exact demo scenario from docs/0.PRD.md section 3.
+      Use Chrome DevTools MCP: navigate_page, take_screenshot, click,
+      evaluate_script, wait_for, list_console_messages.
+      This is the final validation before polish — if the demo works here,
+      we're in good shape.
+      Screenshots serve as evidence for hackathon judges.
+
+  # ============================================================
+  # STAGE 5: Polish + E2E
+  # ============================================================
+
+  - id: "US-022"
+    title: "Fix bugs found during manual testing"
+    description: >
+      As a developer, I want to fix all bugs documented during manual testing
+      checkpoints (US-017 and US-021) so the demo is clean and reliable.
+    acceptanceCriteria:
+      - "All bugs marked as 'BUGS FOUND' or 'DEMO BUGS' in progress.txt are addressed"
+      - "Critical bugs are fixed (anything that breaks the demo flow)"
+      - "Non-critical bugs are either fixed or documented as known issues"
+      - "All existing tests still pass after fixes"
+      - "Typecheck passes"
+      - "Verify in browser: re-run affected scenarios to confirm fixes"
+    priority: 22
+    passes: false
+    notes: >
+      This story is dynamic — its scope depends on what bugs were found.
+      If no bugs were found in US-017 and US-021, mark this as passes: true
+      with a note saying 'no bugs to fix'.
+      Prioritize demo-breaking bugs over cosmetic issues.
+
+  - id: "US-023"
+    title: "Extension: Error handling + degraded mode + polish"
+    description: >
+      As a user, I want the extension to work gracefully when the backend is
+      unavailable and to be resilient to page re-renders.
+    acceptanceCriteria:
+      - "Backend unavailable at startup: extension still loads, shows warning, Turf.js validation works"
+      - "Backend goes down mid-session: server validate shows error, client validation continues"
+      - "deck.gl not found on page: show clear message in panel instead of blank/crash"
+      - "MutationObserver re-injects layers after React re-render of map component"
+      - "No console errors in normal operation"
+      - "Panel is draggable or collapsible (quality of life)"
+      - "Typecheck passes"
+      - "Verify in browser: stop backend, extension still works for client validation"
+    priority: 23
+    passes: false
+    notes: >
+      Degraded mode: load GeoJSON data bundled with extension as fallback
+      (copy from backend/data/ at build time or embed as static assets).
+      This ensures layers display even without backend.
+
+  - id: "US-024"
+    title: "E2E tests: full demo scenario with Playwright"
+    description: >
+      As a developer, I want Playwright e2e tests that verify the complete
+      demo scenario on the real 4dinno.ru site.
+    acceptanceCriteria:
+      - "Test: extension loads on 4dinno.ru/map/territory, panel visible in DOM"
+      - "Test: deck.gl instance found via React fiber walk (page.evaluate)"
+      - "Test: GIS layers loaded (cadastral-layer + protection-zones-layer IDs in deck)"
+      - "Test: layer toggle hides/shows layer"
+      - "Test: preset selection + building placement on map click"
+      - "Test: server validation via Проверить button returns result"
+      - "Tests use custom fixture with launchPersistentContext + --load-extension"
+      - "Backend auto-started via playwright.config.ts webServer"
+      - "All e2e tests pass: npx playwright test"
+      - "Typecheck passes"
+    priority: 24
+    passes: false
+    notes: >
+      Follow testing-react-ts skill for e2e patterns.
+      See docs/2.PLAN.TESTING_STRATEGY.md for fixture details, Chrome binary path,
+      headless setup, and helper functions.
+      Use deck-helpers.ts for page.evaluate patterns.
+      Use panel-helpers.ts for UI interactions.
+      These are the most important tests — they prove the demo works end-to-end.

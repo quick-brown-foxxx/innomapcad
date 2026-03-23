@@ -110,7 +110,7 @@ archive_current() {
 run_tool() {
     case "$TOOL" in
         claude)
-            claude --dangerously-skip-permissions --print < "$PROMPT"
+            claude --agent orchestrator --teammate-mode in-process --dangerously-skip-permissions --print < "$PROMPT"
             ;;
         amp)
             cat "$PROMPT" | amp --dangerously-allow-all

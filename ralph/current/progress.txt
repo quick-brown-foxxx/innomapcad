@@ -1,0 +1,18 @@
+# InnoMapCAD — Ralph Progress Log
+
+## Initialized — 2026-03-23
+- PRD created with 17 user stories (v1)
+- Extension architecture: React/TypeScript (NOT vanilla JS as PRD originally stated)
+- All skills loaded and referenced in RALPH.md
+
+## PRD Updated — 2026-03-23
+- Expanded to 24 user stories (v2)
+- Added US-004: Cleanup pre-existing test artifacts (test-extension/, test-extension-playwright/, scripts/)
+- Added US-005: Create README.md + update AGENTS.md (human-facing + AI-facing docs)
+- Added US-006: Research GeoJSON data sources (NSPD, rosreestr2coord, 4dinno.ru API, OSM)
+- Added US-007: Acquire/generate real GeoJSON data files for Innopolis
+- Added US-017: Manual testing checkpoint after integration (Chrome DevTools MCP)
+- Added US-021: Manual testing checkpoint after full demo scenario
+- Added US-022: Fix bugs found during manual testing (dynamic scope)
+- Renumbered all subsequent stories (old US-004→US-008, etc.)
+- Stories now cover: scaffolding → cleanup → docs → data → backend → extension → integration → manual test → placement → validation → manual test → bugfix → polish → e2e
