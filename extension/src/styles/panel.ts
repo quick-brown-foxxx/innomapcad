@@ -122,4 +122,53 @@ export const PANEL_CSS = `
       transform: rotate(360deg);
     }
   }
+
+  .innomap-rotation-tooltip {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 10px;
+    background: #2a2a2a;
+    border-radius: 6px;
+    margin-top: 8px;
+  }
+
+  .innomap-rotation-tooltip span {
+    font-size: 13px;
+    color: #ffffffd9;
+    min-width: 36px;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .innomap-rotation-btn {
+    background: none;
+    border: 1px solid #434343;
+    color: #ffffffd9;
+    cursor: pointer;
+    font-size: 14px;
+    width: 28px;
+    height: 28px;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.15s;
+  }
+
+  .innomap-rotation-btn:hover {
+    background: #333333;
+  }
+
+  .innomap-rotation-btn:active {
+    background: #444444;
+  }
+
+  .innomap-rotation-label {
+    font-size: 11px;
+    color: #ffffff73;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-right: 4px;
+  }
 ` as const;
