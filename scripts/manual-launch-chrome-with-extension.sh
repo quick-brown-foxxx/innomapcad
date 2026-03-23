@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Launch Chrome with extension for MCP testing
-# Usage: ./scripts/launch-chrome-with-extension.sh [extension_path] [port]
+# Usage: ./scripts/manual-launch-chrome-with-extension.sh [extension_path] [port]
 
 set -euo pipefail
 
