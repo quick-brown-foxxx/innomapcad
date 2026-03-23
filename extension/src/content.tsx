@@ -107,7 +107,7 @@ function listenForDeckReady(): void {
     void loadBackendData().then((anySuccess) => {
       if (!anySuccess) {
         useUIStore.getState().setBackendWarning(
-          'Backend unavailable. Layers will not be displayed.',
+          '\u0411\u044d\u043a\u0435\u043d\u0434 \u043d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u0435\u043d. \u041a\u043b\u0438\u0435\u043d\u0442\u0441\u043a\u0430\u044f \u0432\u0430\u043b\u0438\u0434\u0430\u0446\u0438\u044f \u0440\u0430\u0431\u043e\u0442\u0430\u0435\u0442.',
         );
       }
     });
@@ -330,11 +330,19 @@ function listenForMapHover(): void {
 
 /**
  * Entry point: waits for deck.gl overlay, injects bridge, then mounts the extension panel.
+ * If deck.gl is not found within the timeout, the panel is still mounted in degraded mode.
  */
 async function init(): Promise<void> {
+  let deckGlFound = false;
+
   try {
     await waitForElement('#deckgl-overlay', DECKGL_TIMEOUT_MS);
+    deckGlFound = true;
+  } catch {
+    // deck.gl overlay not found within timeout — continue in degraded mode
+  }
 
+  if (deckGlFound) {
     // Set up bridge communication before injecting
     listenForDeckReady();
     subscribeToLayerUpdates();
@@ -345,12 +353,21 @@ async function init(): Promise<void> {
 
     // Inject the page-context script for fiber walk + setProps patching
     injectPageScript();
+  } else {
+    useUIStore.getState().setDeckGlFound(false);
 
-    // Mount the UI panel
-    mountPanel();
-  } catch {
-    // deck.gl overlay not found within timeout — do not mount
+    // Even without deck.gl, try to load backend data for presets
+    void loadBackendData().then((anySuccess) => {
+      if (!anySuccess) {
+        useUIStore.getState().setBackendWarning(
+          '\u0411\u044d\u043a\u0435\u043d\u0434 \u043d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u0435\u043d. \u041a\u043b\u0438\u0435\u043d\u0442\u0441\u043a\u0430\u044f \u0432\u0430\u043b\u0438\u0434\u0430\u0446\u0438\u044f \u0440\u0430\u0431\u043e\u0442\u0430\u0435\u0442.',
+        );
+      }
+    });
   }
+
+  // Always mount the UI panel
+  mountPanel();
 }
 
 void init();

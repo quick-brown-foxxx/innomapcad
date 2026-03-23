@@ -43,6 +43,11 @@ export const PANEL_CSS = `
     justify-content: space-between;
   }
 
+  .innomap-panel:not(:has(.innomap-section)) .innomap-header {
+    border-bottom: none;
+    border-radius: 8px;
+  }
+
   .innomap-header h3 {
     margin: 0;
     font-size: 15px;

@@ -19,6 +19,8 @@ export interface UIState {
   readonly validationStatus: ValidationStatus;
   readonly validationConflicts: readonly ValidationConflict[];
   readonly backendWarning: string | null;
+  readonly panelCollapsed: boolean;
+  readonly deckGlFound: boolean;
 }
 
 export interface UIActions {
@@ -28,6 +30,8 @@ export interface UIActions {
   setValidationConflicts: (conflicts: readonly ValidationConflict[]) => void;
   resetValidation: () => void;
   setBackendWarning: (warning: string | null) => void;
+  togglePanel: () => void;
+  setDeckGlFound: (found: boolean) => void;
 }
 
 type UIStore = UIState & UIActions;
@@ -42,6 +46,8 @@ export const useUIStore = create<UIStore>(
     validationStatus: 'idle',
     validationConflicts: [],
     backendWarning: null,
+    panelCollapsed: false,
+    deckGlFound: true,
 
     selectPreset: (preset: string | null): void => {
       set((state) => ({
@@ -75,6 +81,14 @@ export const useUIStore = create<UIStore>(
 
     setBackendWarning: (warning: string | null): void => {
       set({ backendWarning: warning });
+    },
+
+    togglePanel: (): void => {
+      set((state) => ({ panelCollapsed: !state.panelCollapsed }));
+    },
+
+    setDeckGlFound: (found: boolean): void => {
+      set({ deckGlFound: found });
     },
   }),
 );

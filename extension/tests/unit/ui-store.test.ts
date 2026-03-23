@@ -10,6 +10,9 @@ describe('useUIStore', () => {
       layerVisibility: { cadastral: true, protectionZones: true },
       validationStatus: 'idle',
       validationConflicts: [],
+      backendWarning: null,
+      panelCollapsed: false,
+      deckGlFound: true,
     });
   });
 
@@ -96,6 +99,45 @@ describe('useUIStore', () => {
 
       expect(useUIStore.getState().validationStatus).toBe('idle');
       expect(useUIStore.getState().validationConflicts).toEqual([]);
+    });
+  });
+
+  describe('togglePanel', () => {
+    it('collapses the panel when expanded', () => {
+      useUIStore.getState().togglePanel();
+      expect(useUIStore.getState().panelCollapsed).toBe(true);
+    });
+
+    it('expands the panel when collapsed', () => {
+      useUIStore.getState().togglePanel();
+      useUIStore.getState().togglePanel();
+      expect(useUIStore.getState().panelCollapsed).toBe(false);
+    });
+  });
+
+  describe('setDeckGlFound', () => {
+    it('sets deckGlFound to false', () => {
+      useUIStore.getState().setDeckGlFound(false);
+      expect(useUIStore.getState().deckGlFound).toBe(false);
+    });
+
+    it('sets deckGlFound to true', () => {
+      useUIStore.getState().setDeckGlFound(false);
+      useUIStore.getState().setDeckGlFound(true);
+      expect(useUIStore.getState().deckGlFound).toBe(true);
+    });
+  });
+
+  describe('setBackendWarning', () => {
+    it('sets a warning message', () => {
+      useUIStore.getState().setBackendWarning('Test warning');
+      expect(useUIStore.getState().backendWarning).toBe('Test warning');
+    });
+
+    it('clears the warning when set to null', () => {
+      useUIStore.getState().setBackendWarning('Test warning');
+      useUIStore.getState().setBackendWarning(null);
+      expect(useUIStore.getState().backendWarning).toBeNull();
     });
   });
 });
