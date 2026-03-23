@@ -7,6 +7,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.routers.health import router as health_router
+from src.routers.layers import router as layers_router
+from src.routers.presets import router as presets_router
 from src.services.data_store import data_store
 
 _ALLOWED_ORIGINS: list[str] = [
@@ -38,3 +40,5 @@ app.add_middleware(
 )
 
 app.include_router(health_router)
+app.include_router(presets_router)
+app.include_router(layers_router)

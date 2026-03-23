@@ -12,3 +12,16 @@ class HealthResponse(msgspec.Struct):
     def to_dict(self) -> dict[str, str | int]:
         """Convert to a plain dict for JSON serialization."""
         return {"status": self.status, "layers_loaded": self.layers_loaded}
+
+
+class Preset(msgspec.Struct, frozen=True):
+    """Building preset with physical dimensions and display metadata."""
+
+    slug: str
+    name: str
+    width_m: float
+    length_m: float
+    floors: int
+    height_m: float
+    setback_m: float
+    color: str
