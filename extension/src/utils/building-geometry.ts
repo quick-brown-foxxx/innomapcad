@@ -52,3 +52,72 @@ export function createBuildingPolygon(
     coordinates: [ring],
   };
 }
+
+/**
+ * Creates a GeoJSON Polygon rectangle centered on the given point, rotated
+ * clockwise by the specified number of degrees.
+ *
+ * @param center - [longitude, latitude] of the center point
+ * @param widthM - width of the building in meters (east-west extent before rotation)
+ * @param lengthM - length of the building in meters (north-south extent before rotation)
+ * @param rotationDeg - clockwise rotation in degrees
+ * @returns A GeoJSON Polygon with a closed ring (5 coordinates)
+ */
+export function createRotatedBuildingPolygon(
+  center: readonly [number, number],
+  widthM: number,
+  lengthM: number,
+  rotationDeg: number,
+): GeoJsonPolygon {
+  if (rotationDeg === 0) {
+    return createBuildingPolygon(center, widthM, lengthM);
+  }
+
+  const [lng, lat] = center;
+
+  const halfW = widthM / 2;
+  const halfL = lengthM / 2;
+
+  // Corner offsets in meter-space (relative to center)
+  // Order: SW, SE, NE, NW (matching createBuildingPolygon)
+  const cornersM: ReadonlyArray<readonly [number, number]> = [
+    [-halfW, -halfL],
+    [halfW, -halfL],
+    [halfW, halfL],
+    [-halfW, halfL],
+  ] as const;
+
+  // Clockwise rotation: x' = x*cos + y*sin, y' = -x*sin + y*cos
+  const rad = (rotationDeg * Math.PI) / 180;
+  const cosR = Math.cos(rad);
+  const sinR = Math.sin(rad);
+
+  const rotatedCorners: Array<readonly [number, number]> = cornersM.map(
+    ([mx, my]) => {
+      const rx = mx * cosR + my * sinR;
+      const ry = -mx * sinR + my * cosR;
+
+      // Convert meter offsets to degree offsets and add to center
+      const lngOffset = rx / METERS_PER_DEG_LNG;
+      const latOffset = ry / METERS_PER_DEG_LAT;
+
+      return [lng + lngOffset, lat + latOffset] as const;
+    },
+  );
+
+  // Close the ring
+  const first = rotatedCorners[0];
+  if (first === undefined) {
+    throw new Error('Invariant: corner array is empty');
+  }
+
+  const ring: ReadonlyArray<readonly [number, number]> = [
+    ...rotatedCorners,
+    first,
+  ];
+
+  return {
+    type: 'Polygon',
+    coordinates: [ring],
+  };
+}
