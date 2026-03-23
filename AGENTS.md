@@ -4,6 +4,10 @@ Chrome Extension (Manifest V3) that injects GIS layers into the 4dinno.ru digita
 
 ## ALWAYS READ docs/PHILOSOPHY.md 100% before writing any code.
 
+## Versioning
+
+Always bump the smallest version number in `extension/manifest.json` on any code change to trigger actions properly.
+
 ---
 
 ## Architecture

@@ -75,39 +75,113 @@ function findDeckInstance(canvas: Element): DeckLike | null {
   return null;
 }
 
+// ---- Layer class extraction ----
+
+/**
+ * SolidPolygonLayer constructor extracted from existing deck.gl sublayers.
+ * This is the ONLY reliable way to create layers — window.deck has no classes.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let SolidPolygonLayerClass: (new (props: Record<string, unknown>) => any) | null = null;
+
+/**
+ * Walks `deck.layerManager.layers` to find a SolidPolygonLayer constructor.
+ * Identified by having `getPolygon` + `extruded` in its props.
+ */
+function extractLayerClasses(deck: DeckLike): void {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+  const lm = (deck as any).layerManager;
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+  if (!lm?.layers) return;
+
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+  for (const layer of lm.layers) {
+    if (SolidPolygonLayerClass !== null) break;
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment
+    const props = layer.props;
+    if (props && 'getPolygon' in props && 'extruded' in props) {
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment
+      SolidPolygonLayerClass = layer.constructor;
+    }
+  }
+}
+
+// ---- GeoJSON to polygon conversion ----
+
+/**
+ * Converts a GeoJSON FeatureCollection into an array of polygon data objects
+ * suitable for SolidPolygonLayer.
+ */
+function geoJsonToPolygonData(data: unknown): unknown[] {
+  if (!data || typeof data !== 'object' || !('features' in data)) return [];
+  const fc = data as { features: Array<{ geometry: { type: string; coordinates: unknown }; properties?: Record<string, unknown> }> };
+  const polygons: unknown[] = [];
+  for (const feature of fc.features) {
+    const geom = feature.geometry;
+    if (geom.type === 'Polygon') {
+      const coords = geom.coordinates as number[][][];
+      const ring = coords[0];
+      if (ring !== undefined) {
+        polygons.push({ polygon: ring.map((c) => [c[0], c[1], 0]), properties: feature.properties });
+      }
+    } else if (geom.type === 'MultiPolygon') {
+      const multiCoords = geom.coordinates as number[][][][];
+      for (const poly of multiCoords) {
+        const ring = poly[0];
+        if (ring !== undefined) {
+          polygons.push({ polygon: ring.map((c) => [c[0], c[1], 0]), properties: feature.properties });
+        }
+      }
+    }
+  }
+  return polygons;
+}
+
 // ---- Layer instantiation ----
 
 /**
- * Resolves a deck.gl layer class from the global scope.
- * deck.gl on the page exposes classes on `window.deck` or similar globals.
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function resolveLayerClass(typeName: string): (new (props: Record<string, unknown>) => any) | null {
-  // deck.gl typically exposes all classes on a global `deck` namespace
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
-  const deckGlobal = (window as any).deck;
-  if (deckGlobal !== null && deckGlobal !== undefined) {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-assignment
-    const cls = deckGlobal[typeName];
-    if (typeof cls === 'function') {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-return
-      return cls;
-    }
-  }
-  return null;
-}
-
-/**
- * Converts a plain LayerConfig into a deck.gl layer instance.
- * Falls back to returning the config as-is if the class cannot be resolved.
+ * Converts a plain LayerConfig into a real deck.gl layer instance.
+ * Returns null if the constructor is not available — never returns plain objects.
  */
 function instantiateLayer(config: LayerConfig): unknown {
-  const LayerClass = resolveLayerClass(config.type);
-  if (LayerClass !== null) {
-    return new LayerClass({ id: config.id, ...config.props });
+  if (SolidPolygonLayerClass === null) {
+    // Can't create proper layers — skip (don't inject plain objects!)
+    return null;
   }
-  // Fallback: return the config as-is (deck.gl may accept plain objects)
-  return { id: config.id, ...config.props };
+
+  if (config.type === 'GeoJsonLayer') {
+    const polygonData = geoJsonToPolygonData(config.props.data);
+    const fillColor = config.props.getFillColor !== undefined ? config.props.getFillColor : [200, 200, 200, 100];
+    const lineColor = config.props.getLineColor !== undefined ? config.props.getLineColor : [200, 200, 200, 255];
+    const pickable = config.props.pickable !== undefined ? config.props.pickable : false;
+    const visible = config.props.visible !== undefined ? config.props.visible : true;
+    return new SolidPolygonLayerClass({
+      id: config.id,
+      data: polygonData,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-member-access
+      getPolygon: (d: any) => d.polygon,
+      getElevation: 0,
+      getFillColor: fillColor,
+      getLineColor: lineColor,
+      filled: true,
+      pickable,
+      visible,
+    } as Record<string, unknown>);
+  }
+
+  if (config.type === 'SolidPolygonLayer') {
+    return new SolidPolygonLayerClass({
+      id: config.id,
+      ...config.props,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-member-access
+      getPolygon: (d: any) => d.polygon,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-return, @typescript-eslint/no-unsafe-member-access
+      getElevation: (d: any) => d.height ?? 0,
+    } as Record<string, unknown>);
+  }
+
+  // Unknown type — skip, don't inject plain objects
+  return null;
 }
 
 // ---- Direct injection + heartbeat ----
@@ -123,7 +197,8 @@ let cachedInstances: readonly unknown[] = [];
 function injectCustomLayers(): void {
   if (deckRef === null || cachedInstances.length === 0) return;
 
-  const currentLayers: readonly unknown[] = (deckRef.props?.layers as unknown[]) ?? [];
+  const rawLayers: unknown = deckRef.props?.layers;
+  const currentLayers: readonly unknown[] = Array.isArray(rawLayers) ? (rawLayers as unknown[]) : [];
 
   // Filter out our layers from current (by id), then append ours
   const customIds = new Set(customLayers.map((l) => l.id));
@@ -143,7 +218,8 @@ function startHeartbeat(): void {
   heartbeatId = setInterval(() => {
     if (deckRef === null || cachedInstances.length === 0) return;
 
-    const currentLayers: readonly unknown[] = (deckRef.props?.layers as unknown[]) ?? [];
+    const rawLayers: unknown = deckRef.props?.layers;
+  const currentLayers: readonly unknown[] = Array.isArray(rawLayers) ? (rawLayers as unknown[]) : [];
     const customIds = new Set(customLayers.map((l) => l.id));
     const hasOurLayers = currentLayers.some(
       (l) => l !== null && typeof l === 'object' && 'id' in l && customIds.has((l as LayerConfig).id),
@@ -266,8 +342,8 @@ document.addEventListener('innomapcad:stop-placing', () => {
 
 document.addEventListener('innomapcad:update-layers', ((event: CustomEvent<readonly LayerConfig[]>) => {
   customLayers = event.detail;
-  // Instantiate ONCE, cache for reuse
-  cachedInstances = customLayers.map((layer) => instantiateLayer(layer));
+  // Instantiate ONCE, cache for reuse. Filter nulls (unknown types or missing constructor).
+  cachedInstances = customLayers.map((layer) => instantiateLayer(layer)).filter(Boolean);
   injectCustomLayers();
 }) as EventListener);
 
@@ -288,6 +364,10 @@ function tryInit(): boolean {
   }
 
   deckRef = deck;
+
+  // Extract layer constructors from existing sublayers
+  extractLayerClasses(deck);
+
   startHeartbeat();
 
   document.dispatchEvent(
@@ -344,6 +424,8 @@ function observeReRenders(): void {
 
     // Re-acquire the deck reference (canvas was replaced by React)
     deckRef = deck;
+    // Re-extract layer constructors from the new deck instance
+    extractLayerClasses(deck);
     // Re-inject cached layers into the new deck instance
     injectCustomLayers();
   });
