@@ -60,13 +60,14 @@ def test_setback_violation(client: TestClient) -> None:
 
     The residential preset has setback_m=5. We place the building just outside
     the gas pipeline zone boundary but within 5m of it.
-    The gas pipeline eastern edge at lat ~55.752 is approximately at lon 48.74116.
-    5m in longitude at this latitude is ~0.00008 degrees.
-    A building at lon 48.74118..48.74122 is ~1-4m east of the zone edge — within 5m setback.
-    Note: this building falls in a gap between parcels, so it also gets
+    After the 42.4deg rotation, we pick a point ~2m outside the zone boundary
+    (at ~30% along the exterior ring) using perpendicular offset.
+    A 2x2m building at lon 48.74619..48.74623, lat 55.75314..55.75316
+    is ~1.6m from the zone edge — within 5m setback but not intersecting.
+    Note: this building falls outside parcels, so it also gets
     an "outside_parcel" conflict, which is expected.
     """
-    geometry = _make_polygon(48.74118, 55.7520, 48.74122, 55.7522)
+    geometry = _make_polygon(48.74619, 55.75314, 48.74623, 55.75316)
     data = _post_validate(client, geometry, "residential")
     assert data.valid is False
     conflict_types = [c.type for c in data.conflicts]

@@ -283,12 +283,6 @@ interface MapCoordEvent {
  * using the deck.gl viewState found on the fiber tree.
  */
 function getMapCoordinates(event: MouseEvent): MapCoordEvent | null {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
-  const deckGlobal = (window as any).deck;
-  if (deckGlobal === null || deckGlobal === undefined) {
-    return null;
-  }
-
   const canvas = document.querySelector('#deckgl-overlay');
   if (canvas === null) {
     return null;
@@ -347,16 +341,29 @@ function handleMapHover(event: MouseEvent): void {
 
 function enablePlacementListeners(): void {
   placingActive = true;
-  if (deckCanvas !== null) {
+
+  const canvas = document.querySelector('#deckgl-overlay');
+  if (!(canvas instanceof HTMLCanvasElement)) {
     return;
   }
-  const canvas = document.querySelector('#deckgl-overlay');
-  if (canvas instanceof HTMLCanvasElement) {
-    deckCanvas = canvas;
-    deckCanvas.addEventListener('click', handleMapClick);
-    deckCanvas.addEventListener('mousemove', handleMapHover);
+
+  // If the cached canvas is still the same DOM node and still connected, reuse it
+  if (deckCanvas === canvas && deckCanvas.isConnected) {
     deckCanvas.style.cursor = 'crosshair';
+    return;
   }
+
+  // Canvas was replaced by React re-render — detach old listeners if any
+  if (deckCanvas !== null) {
+    deckCanvas.removeEventListener('click', handleMapClick);
+    deckCanvas.removeEventListener('mousemove', handleMapHover);
+    deckCanvas.style.cursor = '';
+  }
+
+  deckCanvas = canvas;
+  deckCanvas.addEventListener('click', handleMapClick);
+  deckCanvas.addEventListener('mousemove', handleMapHover);
+  deckCanvas.style.cursor = 'crosshair';
 }
 
 function disablePlacementListeners(): void {
