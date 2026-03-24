@@ -277,6 +277,95 @@
         color: #888;
         margin-top: 16px;
       }
+
+      @media print {
+        body {
+          overflow: visible;
+          background: #fff;
+          color: #000;
+        }
+
+        .slide {
+          display: flex !important;
+          height: 100vh;
+          page-break-after: always;
+          background: #fff;
+          color: #000;
+        }
+
+        .slide:last-of-type {
+          page-break-after: avoid;
+        }
+
+        .nav,
+        .counter {
+          display: none !important;
+        }
+
+        .title-accent {
+          background: none;
+          -webkit-background-clip: unset;
+          -webkit-text-fill-color: #2a6cb6;
+          background-clip: unset;
+          color: #2a6cb6;
+        }
+
+        h2,
+        .points li,
+        .flow-box .value,
+        .small {
+          color: #333;
+        }
+
+        .highlight {
+          color: #1a5276;
+        }
+
+        .warn {
+          color: #922b21;
+        }
+
+        .green {
+          color: #1e7e34;
+        }
+
+        .flow-box,
+        .alt-card,
+        .vs-card {
+          background: #fff;
+          border: 1px solid #555;
+        }
+
+        .alt-card .cons {
+          color: #922b21;
+        }
+
+        .vs-card .name {
+          color: #1a5276;
+        }
+
+        .vs-card .pros {
+          color: #1e7e34;
+        }
+
+        .points li::before {
+          background: #1a5276;
+        }
+
+        .flow-arrow {
+          color: #1a5276;
+        }
+
+        .timeline-item .time {
+          color: #1a5276;
+        }
+
+        .badge {
+          background: #f0f0f0;
+          border: 1px solid #555;
+          color: #333;
+        }
+      }
     </style>
   </head>
   <body>
