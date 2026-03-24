@@ -281,16 +281,16 @@
       @media print {
         body {
           overflow: visible;
-          background: #fff;
-          color: #000;
+          /* background: #fff; */
+          /* color: #000; */
         }
 
         .slide {
           display: flex !important;
           height: 100vh;
           page-break-after: always;
-          background: #fff;
-          color: #000;
+          /* background: #fff; */
+          /* color: #000; */
         }
 
         .slide:last-of-type {
@@ -303,41 +303,41 @@
         }
 
         .title-accent {
-          background: none;
-          -webkit-background-clip: unset;
-          -webkit-text-fill-color: #2a6cb6;
-          background-clip: unset;
-          color: #2a6cb6;
+          /* background: none; */
+          /* -webkit-background-clip: unset; */
+          /* -webkit-text-fill-color: #2a6cb6; */
+          /* background-clip: unset; */
+          /* color: #2a6cb6; */
         }
 
         h2,
         .points li,
         .flow-box .value,
         .small {
-          color: #333;
+          /* color: #333; */
         }
 
         .highlight {
-          color: #1a5276;
+          /* color: #1a5276; */
         }
 
         .warn {
-          color: #922b21;
+          /* color: #922b21; */
         }
 
         .green {
-          color: #1e7e34;
+          /* color: #1e7e34; */
         }
 
         .flow-box,
         .alt-card,
         .vs-card {
-          background: #fff;
-          border: 1px solid #555;
+          /* background: #fff; */
+          /* border: 1px solid #555; */
         }
 
         .alt-card .cons {
-          color: #922b21;
+          /* color: #922b21; */
         }
 
         .vs-card .name {
@@ -345,25 +345,25 @@
         }
 
         .vs-card .pros {
-          color: #1e7e34;
+          /* color: #1e7e34; */
         }
 
         .points li::before {
-          background: #1a5276;
+          /* background: #1a5276; */
         }
 
         .flow-arrow {
-          color: #1a5276;
+          /* color: #1a5276; */
         }
 
         .timeline-item .time {
-          color: #1a5276;
+          /* color: #1a5276; */
         }
 
         .badge {
-          background: #f0f0f0;
-          border: 1px solid #555;
-          color: #333;
+          /* background: #f0f0f0; */
+          /* border: 1px solid #555; */
+          /* color: #333; */
         }
       }
     </style>
@@ -376,8 +376,12 @@
         «Иннополис»
       </h1>
       <h2>Геоинформационные слои и валидация размещения объектов</h2>
-      <div style="margin-top: 24px;">
-        <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://github.com/quick-brown-foxxx/innomapcad&bgcolor=0a0a0a&color=ffffff" alt="QR GitHub" style="border-radius: 8px;">
+      <div style="margin-top: 24px">
+        <img
+          src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=https://github.com/quick-brown-foxxx/innomapcad&bgcolor=0a0a0a&color=ffffff"
+          alt="QR GitHub"
+          style="border-radius: 8px"
+        />
         <p class="small">github.com/quick-brown-foxxx/innomapcad</p>
       </div>
     </div>
@@ -404,23 +408,28 @@
     </div>
 
     <!-- Slide 3: Twin already exists -->
-    <div class="slide" id="s3" style="padding: 30px 120px; overflow-y: auto;">
-      <h1 style="margin-bottom: 20px; font-size: 2.6rem;">У Иннополиса <span class="green">уже есть</span> двойник</h1>
-      <ul class="points" style="margin-bottom: 16px;">
-        <li style="font-size: 1.25rem; margin-bottom: 10px;">
+    <div class="slide" id="s3" style="padding: 30px 120px; overflow-y: auto">
+      <h1 style="margin-bottom: 20px; font-size: 2.6rem">
+        У Иннополиса <span class="green">уже есть</span> двойник
+      </h1>
+      <ul class="points" style="margin-bottom: 16px">
+        <li style="font-size: 1.25rem; margin-bottom: 10px">
           Платформа <span class="highlight">4dinno.ru</span> — рабочий цифровой
           двойник с 3D-картой территории
         </li>
-        <li style="font-size: 1.25rem; margin-bottom: 10px;">
+        <li style="font-size: 1.25rem; margin-bottom: 10px">
           Современная архитектура — платформа
           <span class="green">расширяема</span>
         </li>
-        <li style="font-size: 1.25rem; margin-bottom: 10px;">
+        <li style="font-size: 1.25rem; margin-bottom: 10px">
           Не нужно строить с нуля — нужно
           <span class="highlight">дополнить</span> тем, чего не хватает
         </li>
       </ul>
-      <div class="screenshot-placeholder" style="margin: 10px 0; flex-shrink: 0; max-height: 50vh;">
+      <div
+        class="screenshot-placeholder"
+        style="margin: 10px 0; flex-shrink: 0; max-height: 50vh"
+      >
         <img src="pics/4d.jpg" alt="4dinno.ru screenshot" />
       </div>
     </div>
@@ -548,7 +557,7 @@
           реестров (НСПД, ЗОУИТ)
         </li>
         <li>
-          <span class="highlight">Простота</span> — минималистичная реализация, 
+          <span class="highlight">Простота</span> — минималистичная реализация,
           которую смогу поддерживать даже студенты
         </li>
       </ul>
