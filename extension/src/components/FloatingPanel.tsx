@@ -116,7 +116,10 @@ export function FloatingPanel(): React.JSX.Element {
   const handleHeaderMouseDown = useCallback(
     (e: React.MouseEvent) => {
       // Don't start drag if clicking on a button (collapse button)
-      if (e.target instanceof HTMLElement && e.target.closest('button') !== null) {
+      if (
+        e.target instanceof HTMLElement &&
+        e.target.closest('button') !== null
+      ) {
         return;
       }
       e.preventDefault();
@@ -153,19 +156,31 @@ export function FloatingPanel(): React.JSX.Element {
       style={panelStyle}
     >
       <div
-        className={`innomap-header${isDragging ? ' dragging' : ''}`}
+        className={`innomap-header${isDragging ? 'dragging' : ''}`}
         onMouseDown={handleHeaderMouseDown}
       >
-        <h3>{'\u0413\u0418\u0421-\u0421\u0410\u041f\u0420 \u0418\u043d\u043d\u043e\u043f\u043e\u043b\u0438\u0441'}</h3>
+        <h3>
+          {
+            '\u0413\u0418\u0421-\u0421\u0410\u041f\u0420 \u0418\u043d\u043d\u043e\u043f\u043e\u043b\u0438\u0441'
+          }
+        </h3>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span className="innomap-badge">{'beta'}</span>
+          <span className="innomap-badge">{'DEMO'}</span>
           <button
             type="button"
-            style={isReloading ? { ...reloadSpinStyle, transform: 'rotate(360deg)' } : reloadSpinStyle}
+            style={
+              isReloading
+                ? { ...reloadSpinStyle, transform: 'rotate(360deg)' }
+                : reloadSpinStyle
+            }
             onClick={() => void handleReload()}
             disabled={isReloading}
-            aria-label={'\u041f\u0435\u0440\u0435\u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044c \u0434\u0430\u043d\u043d\u044b\u0435'}
-            title={'\u041f\u0435\u0440\u0435\u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044c \u0441\u043b\u043e\u0438 \u0441 \u0441\u0435\u0440\u0432\u0435\u0440\u0430'}
+            aria-label={
+              '\u041f\u0435\u0440\u0435\u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044c \u0434\u0430\u043d\u043d\u044b\u0435'
+            }
+            title={
+              '\u041f\u0435\u0440\u0435\u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044c \u0441\u043b\u043e\u0438 \u0441 \u0441\u0435\u0440\u0432\u0435\u0440\u0430'
+            }
           >
             {'\u21BB'}
           </button>
@@ -173,7 +188,11 @@ export function FloatingPanel(): React.JSX.Element {
             type="button"
             style={headerButtonStyle}
             onClick={togglePanel}
-            aria-label={panelCollapsed ? '\u0420\u0430\u0437\u0432\u0435\u0440\u043d\u0443\u0442\u044c \u043f\u0430\u043d\u0435\u043b\u044c' : '\u0421\u0432\u0435\u0440\u043d\u0443\u0442\u044c \u043f\u0430\u043d\u0435\u043b\u044c'}
+            aria-label={
+              panelCollapsed
+                ? '\u0420\u0430\u0437\u0432\u0435\u0440\u043d\u0443\u0442\u044c \u043f\u0430\u043d\u0435\u043b\u044c'
+                : '\u0421\u0432\u0435\u0440\u043d\u0443\u0442\u044c \u043f\u0430\u043d\u0435\u043b\u044c'
+            }
           >
             {panelCollapsed ? '\u25BC' : '\u25B2'}
           </button>
@@ -184,7 +203,9 @@ export function FloatingPanel(): React.JSX.Element {
         <>
           {!deckGlFound && (
             <div className="innomap-section">
-              <div style={infoStyle}>{'deck.gl \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d'}</div>
+              <div style={infoStyle}>
+                {'deck.gl \u043d\u0435 \u043d\u0430\u0439\u0434\u0435\u043d'}
+              </div>
             </div>
           )}
 
